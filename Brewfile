@@ -10,6 +10,7 @@ cask 'sequel-pro'
 cask 'appcleaner'
 cask 'gifcapture'
 cask 'gitify'
+cask 'pock'
 
 # Comm
 cask 'whatsapp'
