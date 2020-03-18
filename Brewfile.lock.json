@@ -81,6 +81,24 @@
             "appdir": "~/Applications"
           }
         }
+      },
+      "whatsapp": {
+        "version": "0.4.1300",
+        "options": {
+          "full_name": "whatsapp",
+          "args": {
+            "appdir": "~/Applications"
+          }
+        }
+      },
+      "gitify": {
+        "version": "3.0.1",
+        "options": {
+          "full_name": "gitify",
+          "args": {
+            "appdir": "~/Applications"
+          }
+        }
       }
     },
     "brew": {

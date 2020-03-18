@@ -9,6 +9,10 @@ cask 'slack'
 cask 'sequel-pro'
 cask 'appcleaner'
 cask 'gifcapture'
+cask 'gitify'
+
+# Comm
+cask 'whatsapp'
 
 # Fonts
 tap 'homebrew/cask-fonts'
