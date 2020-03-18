@@ -8,6 +8,7 @@ cask 'rectangle'
 cask 'slack'
 cask 'sequel-pro'
 cask 'appcleaner'
+cask 'gifcapture'
 
 # Fonts
 tap 'homebrew/cask-fonts'
