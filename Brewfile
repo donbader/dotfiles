@@ -9,7 +9,7 @@ cask 'sequel-pro' # SQL querying tool
 cask 'appcleaner' # App Uninstaller
 cask 'gifcapture' # Screenshot Gif
 cask 'gitify' # Git Notification on menu bar
-cask 'pock' # Optional: Touchbar customization
+# cask 'pock' # Optional: Touchbar customization
 
 # Comm
 cask 'slack'
