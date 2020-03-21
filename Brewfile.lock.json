@@ -126,6 +126,15 @@
             "appdir": "~/Applications"
           }
         }
+      },
+      "lyricsx": {
+        "version": "1.5.1,2158",
+        "options": {
+          "full_name": "lyricsx",
+          "args": {
+            "appdir": "~/Applications"
+          }
+        }
       }
     },
     "brew": {

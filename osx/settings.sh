@@ -145,6 +145,14 @@ defaults write com.runningwithcrayons.Alfred-Preferences NSNavLastRootDirectory 
 defaults write com.runningwithcrayons.Alfred-Preferences syncfolder -string "~/.dotfiles/alfred"
 
 ###############################################################################
+# Alfred                                                                      #
+###############################################################################
+defaults write ddddxxx.LyricsX ChineseConversionIndex -int 2
+defaults write ddddxxx.LyricsX DesktopLyricsEnabled -bool false
+defaults write ddddxxx.LyricsX LaunchAndQuitWithPlayer -bool true
+defaults write ddddxxx.LyricsX MenuBarLyricsEnabled -bool true
+
+###############################################################################
 # Kill affected applications                                                  #
 ###############################################################################
 
