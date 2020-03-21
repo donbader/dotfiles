@@ -148,9 +148,11 @@ defaults write com.runningwithcrayons.Alfred-Preferences syncfolder -string "~/.
 # Alfred                                                                      #
 ###############################################################################
 defaults write ddddxxx.LyricsX ChineseConversionIndex -int 2
+defaults write ddddxxx.LyricsX MenuBarLyricsEnabled -bool true
 defaults write ddddxxx.LyricsX DesktopLyricsEnabled -bool false
 defaults write ddddxxx.LyricsX LaunchAndQuitWithPlayer -bool true
-defaults write ddddxxx.LyricsX MenuBarLyricsEnabled -bool true
+defaults write ddddxxx.LyricsX PreferredPlayerIndex -int 1
+
 
 ###############################################################################
 # Kill affected applications                                                  #
