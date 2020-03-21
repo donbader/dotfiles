@@ -108,6 +108,24 @@
             "appdir": "~/Applications"
           }
         }
+      },
+      "rambox": {
+        "version": "0.7.3",
+        "options": {
+          "full_name": "rambox",
+          "args": {
+            "appdir": "~/Applications"
+          }
+        }
+      },
+      "spotify": {
+        "version": "latest",
+        "options": {
+          "full_name": "spotify",
+          "args": {
+            "appdir": "~/Applications"
+          }
+        }
       }
     },
     "brew": {

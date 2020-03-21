@@ -132,7 +132,7 @@
 # Enable this translation set?
 ENABLE=true
 # Set the source language
-SOURCE_LANGUAGE="en"
+SOURCE_LANGUAGE="auto"
 # Set the destination language
 DESTINATION_LANGUAGE="zh-TW"
 
