@@ -34,6 +34,7 @@
 
 - link:
     zsh/ohmyzsh/custom/themes/powerlevel10k: zsh/powerlevel10k
+    ~/Applications/LyricsX.app/Contents/Resources/UserDefaults.plist: LyricsX/UserDefaults.plist
 
 # For first time installation
 # - shell:

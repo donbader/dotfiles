@@ -144,17 +144,6 @@ defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 65 "{ en
 defaults write com.runningwithcrayons.Alfred-Preferences NSNavLastRootDirectory -string "~/.dotfiles/alfred"
 defaults write com.runningwithcrayons.Alfred-Preferences syncfolder -string "~/.dotfiles/alfred"
 
-###############################################################################
-# Alfred                                                                      #
-###############################################################################
-# https://github.com/ddddxxx/LyricsX/blob/c8fa02f8c98dd857cdc3c5724e5a2708d6dc0a6e/LyricsX/Utility/Global.swift
-defaults write ddddxxx.LyricsX ChineseConversionIndex -int 2
-defaults write ddddxxx.LyricsX MenuBarLyricsEnabled -bool true
-defaults write ddddxxx.LyricsX DesktopLyricsEnabled -bool false
-defaults write ddddxxx.LyricsX LaunchAndQuitWithPlayer -bool true
-defaults write ddddxxx.LyricsX PreferredPlayerIndex -int 1
-defaults write ddddxxx.LyricsX CombinedMenubarLyrics -bool true
-
 
 ###############################################################################
 # Kill affected applications                                                  #

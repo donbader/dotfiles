@@ -9,6 +9,7 @@ cask 'appcleaner' # App Uninstaller
 cask 'gifcapture' # Screenshot Gif
 cask 'gitify' # Git Notification on menu bar
 cask 'rectangle' # Windows resizing tool
+cask 'pref-setter' # Plist editor
 # cask 'pock' # Optional: Touchbar customization
 
 # Comm
