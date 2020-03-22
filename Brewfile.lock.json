@@ -135,6 +135,15 @@
             "appdir": "~/Applications"
           }
         }
+      },
+      "pref-setter": {
+        "version": "2.0",
+        "options": {
+          "full_name": "pref-setter",
+          "args": {
+            "appdir": "~/Applications"
+          }
+        }
       }
     },
     "brew": {

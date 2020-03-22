@@ -147,6 +147,7 @@ defaults write com.runningwithcrayons.Alfred-Preferences syncfolder -string "~/.
 ###############################################################################
 # Alfred                                                                      #
 ###############################################################################
+# https://github.com/ddddxxx/LyricsX/blob/c8fa02f8c98dd857cdc3c5724e5a2708d6dc0a6e/LyricsX/Utility/Global.swift
 defaults write ddddxxx.LyricsX ChineseConversionIndex -int 2
 defaults write ddddxxx.LyricsX MenuBarLyricsEnabled -bool true
 defaults write ddddxxx.LyricsX DesktopLyricsEnabled -bool false

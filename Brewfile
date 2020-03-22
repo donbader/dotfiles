@@ -9,7 +9,6 @@ cask 'appcleaner' # App Uninstaller
 cask 'gifcapture' # Screenshot Gif
 cask 'gitify' # Git Notification on menu bar
 cask 'rectangle' # Windows resizing tool
-cask 'spotify'
 # cask 'pock' # Optional: Touchbar customization
 
 # Comm
@@ -22,6 +21,7 @@ tap 'homebrew/cask-fonts'
 cask 'font-hack-nerd-font'
 
 # Media
+cask 'spotify'
 cask 'lyricsx'
 
 # Shell
