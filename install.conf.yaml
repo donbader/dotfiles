@@ -7,19 +7,7 @@
       stdout: true
       stderr: true
 
-- shell:
-  - [git submodule update --init --recursive, "Installing submodules"]
-
-- clean: ['~']
-
-- link:
-    ~/.dotfiles: ''
-    ~/.zshrc: zsh/.zshrc
-    ~/.gitconfig: git/.gitconfig
-    ~/.gitignore: git/.gitignore
-    ~/.vim: .vim
-    ~/.vimrc: .vim/.vimrc
-
+# Create neccessary folders
 - create:
   - ~/Inbox
   - ~/Downloads
@@ -27,16 +15,38 @@
   - ~/Projects
   - ~/Notes
 
+# Update submodules
+- shell:
+  - [git submodule update --init --recursive, "Installing submodules"]
+
+# Install Brew
 - shell:
   - [brew/install.sh, "Installing Brew"]
-  - [brew bundle, "Installing Apps"]
+  - [rvm/install.sh, "Installing RVM"]
+  - [nvm/install.sh, "Installing NVM"]
 
+# shell dotfiles
+- clean: ['~']
 - link:
+    ~/.dotfiles: ''
+    ~/.zshrc: zsh/.zshrc
+    ~/.gitconfig: git/.gitconfig
+    ~/.gitignore: git/.gitignore
+    ~/.vim: .vim
+    ~/.vimrc: .vim/.vimrc
     zsh/ohmyzsh/custom/themes/powerlevel10k: zsh/powerlevel10k
 
-# For first time installation
+# Install Apps
+- shell:
+  - [brew bundle, "Installing Apps"]
+
+# Install VS Code config
+- link:
+    "~/Library/Application Support/Code/User/":
+      glob: true
+      force: true
+      path: vscode/*
+
+# Install OSX settings
 # - shell:
-  # - [osx/settings.sh, "Setup OSX defaults"]
-  # - [open ~/Applications/Rectangle.app, "Open Rectangle for authorization"]
-  # - [rvm/install.sh, "Installing RVM"]
-  # - [nvm/install.sh, "Installing NVM"]
+#   - [osx/settings.sh, "Setup OSX defaults"]

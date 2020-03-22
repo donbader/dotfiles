@@ -242,7 +242,7 @@
     },
     "tap": {
       "homebrew/cask-fonts": {
-        "revision": "8a876fb1228023f2bc95e783567e3adf264367b1"
+        "revision": "08c20b31cee57d8f067053b51786f80c000794e5"
       }
     }
   },
@@ -251,7 +251,7 @@
       "mojave": {
         "HOMEBREW_VERSION": "2.2.10",
         "HOMEBREW_PREFIX": "/usr/local",
-        "Homebrew/homebrew-core": "71079f20cf15b162588b007e7677328f607754e2",
+        "Homebrew/homebrew-core": "134ad17722a60c478996e3315628e5223b948b67",
         "CLT": "10.3.0.0.1.1562985497",
         "Xcode": "10.2.1",
         "macOS": "10.14.6"

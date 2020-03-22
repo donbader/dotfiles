@@ -1,0 +1,27 @@
+{
+    "editor.minimap.enabled": false,
+    "editor.lineNumbers": "on",
+    "editor.wordWrap": "on",
+    "editor.autoIndent": "full",
+    "editor.acceptSuggestionOnEnter": "off",
+    "workbench.colorTheme": "Popping and Locking",
+
+    "git.detectSubmodules": false,
+
+    "powermode.enabled": true,
+    "powermode.explosionSize": 10,
+    "powermode.shakeIntensity": 1,
+
+    "files.autoSave": "onWindowChange",
+    "files.trimTrailingWhitespace": true,
+    "files.trimFinalNewlines": true,
+
+    "projectManager.git.baseFolders": [
+        "$home/Projects",
+        "$home/dotfiles"
+    ],
+    "window.zoomLevel": -1,
+    "explorer.confirmDelete": false,
+    "explorer.confirmDragAndDrop": false,
+    "workbench.iconTheme": "material-icon-theme"
+}

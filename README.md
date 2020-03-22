@@ -2,8 +2,8 @@
 
 ### Bootstrap
 ```
-git clone https://github.com/donbader/dotfiles ~/.dotfiles
-cd ~/.dotfiles
+git clone https://github.com/donbader/dotfiles ~/dotfiles
+cd ~/dotfiles
 ./install
 ```
 
