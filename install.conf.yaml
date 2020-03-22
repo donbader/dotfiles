@@ -46,6 +46,8 @@
       glob: true
       force: true
       path: vscode/*
+- shell:
+  - [vscode/install_extensions.sh, "Install VS Code extensions"]
 
 # Install OSX settings
 # - shell:
