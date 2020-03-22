@@ -152,6 +152,7 @@ defaults write ddddxxx.LyricsX MenuBarLyricsEnabled -bool true
 defaults write ddddxxx.LyricsX DesktopLyricsEnabled -bool false
 defaults write ddddxxx.LyricsX LaunchAndQuitWithPlayer -bool true
 defaults write ddddxxx.LyricsX PreferredPlayerIndex -int 1
+defaults write ddddxxx.LyricsX CombinedMenubarLyrics -bool true
 
 
 ###############################################################################
