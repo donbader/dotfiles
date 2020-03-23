@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!env bash
 
 # Refer to:
 # https://github.com/mathiasbynens/dotfiles/blob/master/.macos
@@ -32,6 +32,12 @@ defaults -currentHost write com.apple.ImageCapture disableHotPlug -bool true
 # Allow unidentified apps
 # https://www.techjunkie.com/gatekeeper-macos-sierra/
 sudo spctl --master-disable
+
+# Disable updates
+defaults write com.apple.SoftwareUpdate AutomaticallyInstallMacOSUpdates -bool false
+defaults write com.apple.SoftwareUpdate AutomaticCheckEnabled -bool false
+defaults write com.apple.SoftwareUpdate AutomaticDownload -bool false
+defaults write com.apple.SoftwareUpdate CriticalUpdateInstall -bool true
 
 ###############################################################################
 # Dock                                                                        #
