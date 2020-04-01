@@ -15,7 +15,7 @@ cask 'rectangle' # Windows resizing tool
 cask 'slack'
 cask 'whatsapp'
 cask 'rambox'
-cask 'zoom'
+cask 'zoomus'
 
 # Fonts
 tap 'homebrew/cask-fonts'

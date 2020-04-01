@@ -30,7 +30,8 @@
   d-branch = !"f() { git branch -D ${1:-$(git branch | fzf)}; }; f"
   d-remote-branch = !"f() { git push origin :${1:-$(git branch-remote-name)}; }; f"
   publish = "!git push -u origin $(git branch-name)"
-	unpublish = "!git push origin :$(git branch-name)"
+  unpublish = "!git push origin :$(git branch-name)"
+  remove-all-other-branches = "!git branch | grep -v $(git branch-name) | xargs git branch -D"
 
   # Advanced git control
   rb = !"f() { git stash; git rebase -i HEAD~${1:-2}; git stash pop; }; f"

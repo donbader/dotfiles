@@ -4,7 +4,7 @@
     "editor.wordWrap": "on",
     "editor.autoIndent": "full",
     "editor.acceptSuggestionOnEnter": "off",
-    "workbench.colorTheme": "Popping and Locking",
+    "workbench.colorTheme": "Gruvbox Dark (Hard)",
 
     "git.detectSubmodules": false,
 
@@ -20,7 +20,7 @@
         "$home/Projects",
         "$home/dotfiles"
     ],
-    "window.zoomLevel": 1,
+    "window.zoomLevel": 2,
     "explorer.confirmDelete": false,
     "explorer.confirmDragAndDrop": false,
     "workbench.iconTheme": "material-icon-theme"
