@@ -1,5 +1,5 @@
 # TODO Unify fzf path
-FZF_PATH=$(brew --prefix fzf)
+FZF_PATH=$(dirname $(dirname $(which brew)))/opt/fzf
 # Setup fzf
 # ---------
 if [[ ! "$PATH" == */$FZF_PATH/bin* ]]; then
