@@ -1,6 +1,7 @@
 cask_args appdir: '~/Applications'
 cask 'iterm2'
 cask 'visual-studio-code'
+cask 'docker'
 
 # Productivity
 cask 'google-chrome'
