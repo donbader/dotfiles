@@ -10,12 +10,13 @@ cask 'appcleaner' # App Uninstaller
 cask 'gifcapture' # Screenshot Gif
 cask 'gitify' # Git Notification on menu bar
 cask 'rectangle' # Windows resizing tool
+cask 'the-unarchiver'
 # cask 'pock' # Optional: Touchbar customization
 
 # Comm
+cask 'station'
 cask 'slack'
 cask 'whatsapp'
-cask 'rambox'
 cask 'zoomus'
 
 # Fonts

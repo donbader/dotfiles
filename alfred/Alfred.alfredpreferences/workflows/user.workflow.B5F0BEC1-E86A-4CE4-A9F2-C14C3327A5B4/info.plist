@@ -140,7 +140,7 @@ DESTINATION_LANGUAGE="zh-TW"
 ###########################################################
 
 if $ENABLE; then
-  ./run-node ./translate.js "$SOURCE_LANGUAGE" "$DESTINATION_LANGUAGE" "{query}"
+  $HOME/.nvm/versions/node/v12.16.2/bin/node ./translate.js "$SOURCE_LANGUAGE" "$DESTINATION_LANGUAGE" "{query}"
 fi
 </string>
 				<key>scriptargtype</key>
@@ -268,7 +268,7 @@ DESTINATION_LANGUAGE="en"
 ###########################################################
 
 if $ENABLE; then
-  ./run-node ./translate.js "$SOURCE_LANGUAGE" "$DESTINATION_LANGUAGE" "{query}"
+  $HOME/.nvm/versions/node/v12.16.2/bin/node ./translate.js "$SOURCE_LANGUAGE" "$DESTINATION_LANGUAGE" "{query}"
 fi
 </string>
 				<key>scriptargtype</key>

@@ -104,6 +104,19 @@
 				<false/>
 			</dict>
 		</array>
+		<key>F36CDFFD-4057-4FF1-965B-4379AE4B8D90</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>05450F7C-3D4F-45BF-ACA3-9422EF54EFDD</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
 	</dict>
 	<key>createdby</key>
 	<string>James Sumners</string>
@@ -115,23 +128,6 @@
 	<string>Emoji search</string>
 	<key>objects</key>
 	<array>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>autopaste</key>
-				<true/>
-				<key>clipboardtext</key>
-				<string>{query}</string>
-				<key>transient</key>
-				<true/>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.output.clipboard</string>
-			<key>uid</key>
-			<string>AEDE6F2A-3933-4CB6-9F5B-0D53DDFE79BA</string>
-			<key>version</key>
-			<integer>3</integer>
-		</dict>
 		<dict>
 			<key>config</key>
 			<dict>
@@ -150,6 +146,48 @@
 			<string>7521B349-C1D6-4186-B21E-8EAC41BD18F3</string>
 			<key>version</key>
 			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>autopaste</key>
+				<true/>
+				<key>clipboardtext</key>
+				<string>{query}</string>
+				<key>transient</key>
+				<true/>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.output.clipboard</string>
+			<key>uid</key>
+			<string>AEDE6F2A-3933-4CB6-9F5B-0D53DDFE79BA</string>
+			<key>version</key>
+			<integer>2</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>action</key>
+				<integer>0</integer>
+				<key>argument</key>
+				<integer>0</integer>
+				<key>focusedappvariable</key>
+				<false/>
+				<key>focusedappvariablename</key>
+				<string></string>
+				<key>leftcursor</key>
+				<false/>
+				<key>modsmode</key>
+				<integer>0</integer>
+				<key>relatedAppsMode</key>
+				<integer>0</integer>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.trigger.hotkey</string>
+			<key>uid</key>
+			<string>F36CDFFD-4057-4FF1-965B-4379AE4B8D90</string>
+			<key>version</key>
+			<integer>2</integer>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -231,8 +269,6 @@ fi
 				<false/>
 				<key>alfredfiltersresultsmatchmode</key>
 				<integer>0</integer>
-				<key>argumenttreatemptyqueryasnil</key>
-				<false/>
 				<key>argumenttrimmode</key>
 				<integer>0</integer>
 				<key>argumenttype</key>
@@ -273,7 +309,7 @@ osascript -l JavaScript emoji.js "$query" 2&gt;&amp;1</string>
 			<key>uid</key>
 			<string>05450F7C-3D4F-45BF-ACA3-9422EF54EFDD</string>
 			<key>version</key>
-			<integer>3</integer>
+			<integer>2</integer>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -305,7 +341,7 @@ osascript -l JavaScript emoji.js "$query" 2&gt;&amp;1</string>
 			<key>uid</key>
 			<string>5A54554C-598A-41C6-B0D9-62046CEFB1AD</string>
 			<key>version</key>
-			<integer>3</integer>
+			<integer>2</integer>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -398,6 +434,13 @@ https://github.com/jsumners/alfred-emoji/issues
 			<key>ypos</key>
 			<integer>290</integer>
 		</dict>
+		<key>F36CDFFD-4057-4FF1-965B-4379AE4B8D90</key>
+		<dict>
+			<key>xpos</key>
+			<integer>50</integer>
+			<key>ypos</key>
+			<integer>100</integer>
+		</dict>
 		<key>F5CA3331-1B99-45EF-8E9A-06C417387250</key>
 		<dict>
 			<key>note</key>
@@ -408,8 +451,13 @@ https://github.com/jsumners/alfred-emoji/issues
 			<integer>180</integer>
 		</dict>
 	</dict>
+	<key>variables</key>
+	<dict>
+		<key>skin_tone</key>
+		<string></string>
+	</dict>
 	<key>version</key>
-	<string>1.8.1</string>
+	<string>1.9.0</string>
 	<key>webaddress</key>
 	<string>https://github.com/jsumners/alfred-emoji</string>
 </dict>

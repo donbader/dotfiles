@@ -12,3 +12,6 @@ alias .files="git --git-dir=$DOTFILES/.git --work-tree=$DOTFILES $@"
 function .cmp!() { .files add --all; .files commit; .files push }
 function .edit!() { code $DOTFILES }
 function .bbundle!() { exec 3>&1; zsh -c "cd $DOTFILES && brew bundle 1>&3 2>&3" }
+
+# Error correcting
+alias gti=git

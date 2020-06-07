@@ -162,6 +162,15 @@
             "appdir": "~/Applications"
           }
         }
+      },
+      "station": {
+        "version": "1.65.0",
+        "options": {
+          "full_name": "station",
+          "args": {
+            "appdir": "~/Applications"
+          }
+        }
       }
     },
     "brew": {
