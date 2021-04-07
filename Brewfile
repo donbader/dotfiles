@@ -14,9 +14,7 @@ cask 'the-unarchiver'
 # cask 'pock' # Optional: Touchbar customization
 
 # Comm
-cask 'station'
 cask 'slack'
-cask 'whatsapp'
 cask 'zoomus'
 
 # Fonts
