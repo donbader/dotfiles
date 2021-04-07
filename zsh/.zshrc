@@ -13,3 +13,5 @@ export PATH="$PATH:$HOME/.rvm/bin"
 
 source $ZDOTDIR/aliases.zsh
 source $ZDOTDIR/config.zsh
+
+export PATH=${PATH}:/usr/local/mysql/bin
