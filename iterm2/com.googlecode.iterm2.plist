@@ -1344,6 +1344,10 @@
 	<true/>
 	<key>IRMemory</key>
 	<integer>4</integer>
+	<key>NeverWarnAboutShortLivedSessions_EE974C4C-0BC6-44FD-A2D9-692C264F5AC2</key>
+	<true/>
+	<key>NeverWarnAboutShortLivedSessions_EE974C4C-0BC6-44FD-A2D9-692C264F5AC2_selection</key>
+	<integer>0</integer>
 	<key>New Bookmarks</key>
 	<array>
 		<dict>
@@ -1707,7 +1711,7 @@
 			<key>HotKey Window Dock Click Action</key>
 			<integer>2</integer>
 			<key>HotKey Window Floats</key>
-			<false/>
+			<true/>
 			<key>HotKey Window Reopens On Activation</key>
 			<false/>
 			<key>Icon</key>
@@ -2213,6 +2217,15 @@
 				<real>0.45490196347236633</real>
 				<key>Red Component</key>
 				<real>0.40392157435417175</real>
+			</dict>
+			<key>Semantic History</key>
+			<dict>
+				<key>action</key>
+				<string>editor</string>
+				<key>editor</key>
+				<string>com.microsoft.VSCode</string>
+				<key>text</key>
+				<string></string>
 			</dict>
 			<key>Send Code When Idle</key>
 			<false/>

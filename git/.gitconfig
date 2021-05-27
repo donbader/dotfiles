@@ -79,3 +79,7 @@
 [user]
 	name = Corey Feng
 	email = corey@xfers.com
+[pull]
+	rebase = false
+[fetch]
+	prune = true
