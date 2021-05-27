@@ -30,3 +30,6 @@ brew 'autojump'
 brew 'fzf'
 brew 'tig'
 brew 'gnupg'
+# K8s tool
+tap 'thecasualcoder/stable'
+brew 'kube-fzf'
