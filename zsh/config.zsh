@@ -1,4 +1,10 @@
-plugins=(git extract brew autojump)
+plugins=(
+  git
+  extract
+  brew
+  autojump
+  zsh-prompt-benchmark
+)
 
 # Set name of the theme to load --- if set to "random", it will
 # load a random theme each time oh-my-zsh is loaded, in which case,
