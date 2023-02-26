@@ -17,3 +17,8 @@ source $ZDOTDIR/aliases.zsh
 source $ZDOTDIR/config.zsh
 
 export PATH=${PATH}:/usr/local/mysql/bin
+
+
+# For building
+export MAKEFLAGS="--jobs $(sysctl -n hw.ncpu)"
+

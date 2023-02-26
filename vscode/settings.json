@@ -24,8 +24,9 @@
     },
     "ruby.codeCompletion": "rcodetools",
     "ruby.intellisense": "rubyLocate",
+    "ruby.format": "rubocop",
     "[ruby]": {
-        "editor.defaultFormatter": "misogi.ruby-rubocop"
+        "editor.defaultFormatter": "misogi.ruby-rubocop",
     },
     "ruby.lint": {
         "rubocop": {
@@ -43,5 +44,6 @@
     "security.workspace.trust.untrustedFiles": "open",
     "powermode.enabled": true,
     "powermode.shake.intensity": 1,
-    "ruby.format": "rubocop",
+    "powermode.combo.timeout": 1,
+    "terminal.external.osxExec": "iTerm.app",
 }

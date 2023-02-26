@@ -2,7 +2,7 @@ plugins=(
   git
   extract
   brew
-  autojump
+  z
 )
 
 # Set name of the theme to load --- if set to "random", it will
