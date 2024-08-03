@@ -21,3 +21,4 @@ alias vpn_watch="/Applications/Pritunl.app/Contents/Resources/pritunl-client wat
 
 # Error correcting
 alias gti=git
+alias vim=nvim

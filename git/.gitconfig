@@ -76,7 +76,8 @@
 	untracked = cyan
 [core]
 	excludesfile = ~/.gitignore
-	editor = vim
+	editor = nvim
+	protectNTFS = false
 [user]
 	name = Corey Feng
 	email = corey.feng@fazzfinancial.com
@@ -85,3 +86,8 @@
 [fetch]
 	prune = true
 
+[filter "lfs"]
+	process = git-lfs filter-process
+	required = true
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f

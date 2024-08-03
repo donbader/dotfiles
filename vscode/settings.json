@@ -18,7 +18,7 @@
     "[json]": {
         "editor.defaultFormatter": "vscode.json-language-features"
     },
-    "workbench.colorTheme": "Gruvbox Dark (Hard)",
+    "workbench.colorTheme": "Gruvbox Dark (Medium)",
     "files.associations": {
         ".env": "shellscript",
     },
@@ -26,7 +26,18 @@
     "ruby.intellisense": "rubyLocate",
     "ruby.format": "rubocop",
     "[ruby]": {
-        "editor.defaultFormatter": "misogi.ruby-rubocop",
+        "editor.defaultFormatter": "Shopify.ruby-lsp",
+        "editor.formatOnSave": true,
+        "editor.formatOnType": true,
+        "editor.insertSpaces": true,
+        "files.insertFinalNewline": true,
+        "editor.rulers": [
+            120
+        ],
+        "editor.semanticHighlighting.enabled": true,
+        "editor.tabSize": 2,
+        "files.trimTrailingWhitespace": true,
+        "files.trimFinalNewlines": true,
     },
     "ruby.lint": {
         "rubocop": {
@@ -36,7 +47,7 @@
     },
     "javascript.updateImportsOnFileMove.enabled": "always",
     "typescript.updateImportsOnFileMove.enabled": "always",
-    "extensions.autoUpdate": false,
+    "extensions.autoUpdate": "onlySelectedExtensions",
     "debug.javascript.autoAttachFilter": "disabled",
     "[sql]": {
         "editor.defaultFormatter": "adpyke.vscode-sql-formatter"
@@ -46,4 +57,50 @@
     "powermode.shake.intensity": 1,
     "powermode.combo.timeout": 1,
     "terminal.external.osxExec": "iTerm.app",
+    "[python]": {
+        "editor.formatOnType": true
+    },
+    "editor.inlineSuggest.enabled": true,
+    "excalidraw.theme": "light",
+    "git.openRepositoryInParentFolders": "never",
+    "hediet.vscode-drawio.resizeImages": null,
+    "go.toolsManagement.autoUpdate": true,
+    "[dockercompose]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[typescriptreact]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[typescript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "rubyLsp.enabledFeatures": {
+
+        "codeActions": true,
+        "diagnostics": true,
+        "documentHighlights": true,
+        "documentLink": true,
+        "documentSymbols": true,
+        "foldingRanges": true,
+        "formatting": true,
+        "hover": true,
+        "inlayHint": true,
+        "onTypeFormatting": true,
+        "selectionRanges": true,
+        "semanticHighlighting": true,
+        "completion": true,
+        "codeLens": true,
+        "definition": true,
+        "workspaceSymbol": true,
+        "references": true
+    },
+    "window.zoomLevel": -1,
+    "powermode.combo.location": "off",
+    "github.copilot.editor.enableAutoCompletions": true,
+    "github.copilot.enable": {
+        "*": true,
+        "plaintext": false,
+        "markdown": false,
+        "scminput": false
+    },
 }
