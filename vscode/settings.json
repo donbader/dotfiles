@@ -5,6 +5,7 @@
     "editor.wordWrap": "on",
     "editor.autoIndent": "full",
     "editor.acceptSuggestionOnEnter": "off",
+    "editor.detectIndentation": true,
 
     "git.detectSubmodules": false,
 
@@ -47,7 +48,7 @@
     },
     "javascript.updateImportsOnFileMove.enabled": "always",
     "typescript.updateImportsOnFileMove.enabled": "always",
-    "extensions.autoUpdate": "onlySelectedExtensions",
+    "extensions.autoUpdate": false,
     "debug.javascript.autoAttachFilter": "disabled",
     "[sql]": {
         "editor.defaultFormatter": "adpyke.vscode-sql-formatter"
@@ -103,4 +104,5 @@
         "markdown": false,
         "scminput": false
     },
+    "security.promptForLocalFileProtocolHandling": false,
 }
