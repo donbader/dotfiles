@@ -105,4 +105,5 @@
         "scminput": false
     },
     "security.promptForLocalFileProtocolHandling": false,
+    "files.insertFinalNewline": true,
 }

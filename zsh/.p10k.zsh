@@ -34,6 +34,7 @@
     # =========================[ Line #1 ]=========================
     # os_icon               # os identifier
     dir                     # current directory
+    flox                    # flox status
     # =========================[ Line #2 ]=========================
     newline                 # \n
     # prompt_char           # prompt symbol
@@ -1840,3 +1841,9 @@ typeset -g POWERLEVEL9K_CONFIG_FILE=${${(%):-%x}:a}
 
 (( ${#p10k_config_opts} )) && setopt ${p10k_config_opts[@]}
 'builtin' 'unset' 'p10k_config_opts'
+
+function prompt_flox(){
+  [[ -n $FLOX_PROMPT_ENVIRONMENTS && $FLOX_PROMPT_ENVIRONMENTS != "default" ]] || return
+  local v=${FLOX_PROMPT_ENVIRONMENTS%default}
+  p10k segment -b 238 -f 015 -t "flox:${v##*/}"
+}
