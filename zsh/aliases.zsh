@@ -18,6 +18,7 @@ alias otp="BUNDLE_GEMFILE=/Users/corey/Projects/useful-utils/Gemfile bundle exec
 alias vpn_connect_fazz="BUNDLE_GEMFILE=/Users/corey/Projects/useful-utils/Gemfile bundle exec ruby /Users/corey/Projects/useful-utils/bin/connect_fazz_vpn"
 alias vpn_disconnect_fazz="/Applications/Pritunl.app/Contents/Resources/pritunl-client stop rsruva15yinkim5g"
 alias vpn_watch="/Applications/Pritunl.app/Contents/Resources/pritunl-client watch"
+alias clauded="claude --dangerously-skip-permissions"
 
 # Error correcting
 alias gti=git

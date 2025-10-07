@@ -21,7 +21,7 @@
     },
     "workbench.colorTheme": "Gruvbox Dark (Medium)",
     "files.associations": {
-        ".env": "shellscript",
+        ".env": "dotenv",
     },
     "ruby.codeCompletion": "rcodetools",
     "ruby.intellisense": "rubyLocate",
@@ -101,9 +101,33 @@
     "github.copilot.enable": {
         "*": true,
         "plaintext": false,
-        "markdown": false,
-        "scminput": false
+        "markdown": true,
+        "scminput": false,
+        "yaml": false,
+        "dotenv": false,
+        "json": false
     },
     "security.promptForLocalFileProtocolHandling": false,
     "files.insertFinalNewline": true,
+    "[css]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[html]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "github.copilot.nextEditSuggestions.enabled": true,
+    "yaml.schemas": {
+        "file:///Users/corey/.vscode/extensions/atlassian.atlascode-3.8.6/resources/schemas/pipelines-schema.json": "bitbucket-pipelines.yml"
+    },
+    "terminal.integrated.env.osx": {
+        "Q_NEW_SESSION": "1"
+    },
+    "amazonQ.suppressPrompts": {
+        "amazonQChatDisclaimer": true,
+        "amazonQSessionConfigurationMessage": true
+    },
+    "chat.agent.maxRequests": 9999,
+    "[jsonc]": {
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
 }
