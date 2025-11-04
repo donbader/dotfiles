@@ -19,6 +19,7 @@ alias vpn_connect_fazz="BUNDLE_GEMFILE=/Users/corey/Projects/useful-utils/Gemfil
 alias vpn_disconnect_fazz="/Applications/Pritunl.app/Contents/Resources/pritunl-client stop rsruva15yinkim5g"
 alias vpn_watch="/Applications/Pritunl.app/Contents/Resources/pritunl-client watch"
 alias clauded="claude --dangerously-skip-permissions"
+alias sshcode="~/.dotfiles/scripts/sshcode.sh"
 
 # Error correcting
 alias gti=git
