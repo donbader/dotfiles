@@ -24,13 +24,12 @@ get_remote_dirs() {
         # Start from home directory
         cd ~ || exit 1
 
-        # Find directories, excluding hidden ones
+        # Find directories, including hidden ones
         find . -maxdepth 3 -type d 2>/dev/null | \
-            grep -v '/\.' | \
             sed 's|^\./||' | \
             sed "s|^|$HOME/|" | \
             grep -v "^$HOME/$" | \
-            head -n 100
+            head -n 1000
 
         # Also add home directory itself
         echo "$HOME"
