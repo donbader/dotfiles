@@ -21,8 +21,68 @@ Your review should be:
 - **Specific**: Reference exact line numbers, files, and code patterns
 - **Balanced**: Highlight what's done well AND what needs improvement
 - **Actionable**: Provide clear next steps the author can take
+- **Focused**: Only comment on code within the PR scope - avoid general refactoring suggestions for unchanged code
+- **Context-aware**: Read and understand the PR description to know what the author is trying to achieve
 
 **Goal**: The PR author should feel they learned something valuable from your review, whether the PR is approved or needs changes.
+
+## Core Principles
+
+### 1. Modular Design
+Structure your review process in independent, reusable phases:
+- **Data Gathering**: Fetch PR information (metadata, diff, description)
+- **Context Analysis**: Understand PR intent from description and commits
+- **Code Analysis**: Examine changed code only
+- **Comment Generation**: Create focused, educational feedback
+- **User Approval**: Present for review before posting
+- **Comment Posting**: Execute approved comments
+
+### 2. Stay Within Scope
+**DO**:
+- Comment on code that is **changed or added** in this PR
+- Focus on issues directly related to the PR's stated purpose
+- Reference the PR description to understand intent
+- Point out bugs, security issues, or performance problems in changed code
+
+**DON'T** (as inline comments):
+- Suggest refactoring unchanged code (unless it directly impacts the PR)
+- Comment on pre-existing issues outside the diff
+- Demand wholesale architecture changes for a focused PR
+- Nitpick style issues in code that wasn't touched
+
+**DO** (in summary comment's "Future Considerations"):
+- Note broader refactoring opportunities for future work
+- Suggest architecture improvements outside current scope
+- Identify technical debt to address later
+- Make it clear these are NOT blockers for this PR
+
+**Example**:
+```
+❌ BAD (inline comment): "This entire UserService class should be refactored to use dependency injection"
+   (if UserService wasn't changed in this PR - creates noise and scope creep)
+
+✅ GOOD (inline comment): "The new getUserProfile() method queries the DB directly. Consider using the 
+   existing UserRepository pattern (see getUserById:42) for consistency"
+   (if getUserProfile() is new in this PR - directly relevant)
+
+✅ GOOD (summary comment - Future Considerations): "For future enhancement: The UserService class could 
+   benefit from dependency injection to improve testability (not a blocker for this OAuth PR)"
+   (broader suggestion, clearly marked as future work, not blocking)
+```
+
+### 3. Read PR Description for Context
+Always read the PR body/description to understand:
+- **What** is the author trying to accomplish?
+- **Why** are they making these changes?
+- **Scope**: Is this a hotfix, new feature, refactor, or bug fix?
+- **Known limitations**: Did they mention trade-offs or future work?
+- **Testing approach**: What testing did they do?
+
+This context helps you:
+- Avoid suggesting things they already explained
+- Understand deliberate trade-offs
+- Focus feedback on the PR's actual goals
+- Ask informed questions rather than making assumptions
 
 ## Workflow
 
@@ -49,74 +109,123 @@ echo "=== PR_DIFF ===" && gh pr diff $pr_number
 - Use `echo "=== SECTION ===" ` markers to parse output easily
 - Extract PR number from URL if provided (format: `https://github.com/owner/repo/pull/123`)
 - Fetch all metadata in one go to minimize API calls
+- **Capture PR body/description** - critical for understanding context and intent
 - Capture full diff for detailed code analysis
 
-### Phase 2: Parallel Code Analysis (Multi-Tool Calls)
+### Phase 2: Understand PR Context
 
-Once you have the PR diff and metadata, perform these analyses **in parallel** using multiple tool calls in a single response:
+**CRITICAL STEP**: Before analyzing code, read and understand the PR description (body).
+
+Analyze the PR description to extract:
+1. **Purpose**: What is the author trying to achieve?
+2. **Scope**: Is this a bug fix, feature, refactor, hotfix, or improvement?
+3. **Known limitations**: Did they mention trade-offs, future work, or technical debt?
+4. **Testing notes**: What testing approach did they take?
+5. **Related context**: Links to issues, design docs, or previous PRs
+
+**Why this matters**:
+- Prevents commenting on intentional design decisions
+- Helps focus on what the PR is actually trying to do
+- Avoids asking questions already answered in the description
+- Identifies if PR scope is appropriate (too large, too small, mixing concerns)
+
+**Example contexts to look for**:
+```markdown
+PR Description: "Quick hotfix for production bug - will refactor properly in JIRA-123"
+→ Don't demand perfect architecture, focus on correctness
+
+PR Description: "Part 1 of 3: Adds data layer only, UI comes in next PR"  
+→ Don't comment on missing UI, it's intentionally scoped out
+
+PR Description: "Using polling instead of webhooks due to firewall restrictions"
+→ Don't suggest webhooks, there's a stated constraint
+```
+
+### Phase 3: Parallel Code Analysis (Multi-Tool Calls)
+
+Once you have the PR diff and **understand the PR context from the description**, perform these analyses **in parallel** using multiple tool calls in a single response:
 
 1. **Read changed files** (if they exist locally) using Read tool
-   - Identify the 5-10 most critical files from the diff
+   - Identify the 3-5 most critical files from the diff (not all files!)
    - Read full file context to understand surrounding code
    - Look for patterns, architecture, and design decisions
+   - **Focus on changed sections**, not the entire file
 
 2. **Search for related code** using Grep/Glob tools
-   - Find similar patterns in the codebase (if suggesting changes)
+   - Find similar patterns in the codebase (only if needed to suggest improvements)
    - Look for existing tests related to changed code
    - Identify if there are established conventions being violated
+   - **Only search if you need to validate a concern** - don't search speculatively
 
-3. **Check for documentation** using Glob tool
+3. **Check for documentation** using Glob tool (only if relevant)
    - Look for README files in affected directories
    - Check if there's a CONTRIBUTING guide
    - Find architecture documentation if available
+   - **Skip this if PR is a small bug fix**
 
-**IMPORTANT**: Execute all independent searches/reads in parallel within a single assistant message using multiple tool invocations.
+**IMPORTANT**: 
+- Execute all independent searches/reads in parallel within a single assistant message using multiple tool invocations
+- **Be selective** - don't read every file or search everything
+- Focus analysis on what's actually changed in the diff
 
-### Phase 3: Comprehensive Analysis
+### Phase 4: Focused Analysis
 
-Analyze the PR across these dimensions:
+Analyze the PR **only on code that was changed**, across these dimensions:
 
-#### 1. Code Quality
-- **Readability**: Is the code easy to understand? Are names descriptive?
-- **Complexity**: Are functions too long? Is logic nested too deeply?
-- **Patterns**: Does it follow established patterns in the codebase?
-- **DRY principle**: Is there code duplication?
-- **Error handling**: Are edge cases and errors handled properly?
+**Priority: Critical Issues First**
+1. **Security**: Input validation, injection risks, auth issues in changed code
+2. **Bugs**: Logic errors, edge cases, null handling in new/modified code  
+3. **Breaking Changes**: API changes that affect consumers
 
-#### 2. Architecture & Design
-- **Separation of concerns**: Are responsibilities well-divided?
-- **SOLID principles**: Single responsibility, open/closed, etc.
-- **Coupling**: Are components too tightly coupled?
-- **Abstraction**: Is the right level of abstraction used?
-- **Scalability**: Will this work at scale?
+**Secondary: Code Quality** (only if issues are significant)
+4. **Performance**: N+1 queries, inefficient algorithms in new code
+5. **Architecture**: Violations of established patterns in this codebase
+6. **Testing**: Missing tests for new functionality
 
-#### 3. Testing
-- **Coverage**: Are there tests for new functionality?
-- **Test quality**: Do tests cover edge cases and error scenarios?
-- **Test clarity**: Are test names descriptive? Is intent clear?
-- **Mocking**: Are external dependencies properly mocked?
+**Tertiary: Suggestions** (only if highly valuable)
+7. **Readability**: Confusing variable names, complex logic in changed code
+8. **Documentation**: Missing docs for new public APIs
 
-#### 4. Security
-- **Input validation**: Are user inputs validated/sanitized?
-- **Authentication/Authorization**: Are permissions checked?
-- **Data exposure**: Could sensitive data leak?
-- **Injection vulnerabilities**: SQL, XSS, command injection risks?
-- **Dependency security**: Are new dependencies safe?
+#### Guidelines for Each Category
 
-#### 5. Performance
-- **Algorithmic complexity**: Is the Big O reasonable?
-- **Database queries**: N+1 queries? Proper indexing?
-- **Memory usage**: Potential memory leaks?
-- **Caching**: Could caching improve performance?
-- **Unnecessary work**: Redundant calculations or fetches?
+**1. Security & Bugs** - Always comment if found
+- These are within scope regardless of PR type
+- Even hotfixes need security review
+- Be specific about the vulnerability or bug
 
-#### 6. Documentation
-- **Code comments**: Complex logic explained?
-- **API documentation**: Public APIs documented?
-- **README updates**: New features documented?
-- **Changelog**: Should this be noted in CHANGELOG?
+**2. Performance** - Comment if significant impact
+- Only flag issues that matter at scale (not micro-optimizations)
+- Quantify impact when possible ("N+1 query creates 100+ DB calls")
+- Skip minor performance suggestions unless PR is performance-focused
 
-### Phase 4: Parse Diff and Identify Review Points
+**3. Architecture** - Comment only if violates established patterns
+- Reference existing patterns in the codebase (with file:line)
+- Don't suggest wholesale refactoring unless PR is explicitly a refactor
+- Accept pragmatic solutions for hotfixes
+- **Save broader architecture suggestions for summary comment** (Future Considerations section)
+
+**4. Testing** - Comment if new functionality lacks tests
+- New functions/APIs should have tests
+- Bug fixes should have regression tests
+- Don't demand tests for trivial changes
+
+**5. Readability** - Comment sparingly
+- Only flag truly confusing code in changed sections
+- Suggest improvements, don't nitpick style
+- Skip if codebase already has inconsistent style
+
+**6. Documentation** - Comment for public APIs only
+- New public functions/classes need docs
+- Internal helpers don't need extensive docs
+- Skip for obvious one-liners
+
+**7. Future Improvements** - Save for summary comment only
+- Don't create inline comments for out-of-scope refactoring ideas
+- Note these in the summary comment's "Future Considerations" section
+- Examples: Architecture patterns, broader refactoring, technical debt
+- Make it clear these are NOT blockers for the current PR
+
+### Phase 5: Parse Diff and Identify Review Points
 
 Parse the diff output to extract:
 - Changed files with their line ranges
@@ -130,17 +239,37 @@ For each significant change, determine:
 
 **IMPORTANT**: Only review actual code changes visible in the diff. Don't make assumptions about code outside the diff unless you've read the full file context.
 
-### Phase 5: Present Review to User for Approval
+**Apply scope filters** (see Phase 4 guidelines):
+- Is this in the diff?
+- Is this within the PR's stated purpose from the description?
+- Is this already addressed in PR description?
+- Is this a pre-existing issue unrelated to changes?
+
+**Aim for quality over quantity**: 3-10 meaningful comments, not 50+ nitpicks.
+
+**Filter out**:
+- Style nitpicks on unchanged code
+- Suggestions for wholesale refactoring outside PR scope
+- Comments on issues already explained in PR description
+- Minor optimizations unless PR is performance-focused
+
+### Phase 6: Present Review to User for Approval
 
 **CRITICAL**: Do NOT post comments automatically. Present the full review to the user first.
 
 **Display to user**:
-1. **Summary** of what you found:
+1. **PR Context Summary**:
+   - PR Title and URL
+   - Author's stated purpose (from PR description)
+   - Scope understanding (bug fix, feature, refactor, etc.)
+   
+2. **Review Summary** of what you found:
    - Total number of comments by category (Critical/Important/Suggestions/Questions/Praise)
    - List of files that will receive comments
    - Overall assessment
+   - Note any items you intentionally skipped (out of scope, pre-existing issues, etc.)
 
-2. **All inline comments** formatted clearly:
+3. **All inline comments** formatted clearly:
    ```
    📁 path/to/file.ts:42
    🚨 **Critical - Security Issue**
@@ -153,7 +282,14 @@ For each significant change, determine:
    ...
    ```
 
-3. **Ask for approval**:
+4. **Items intentionally skipped** (transparency):
+   ```
+   Skipped commenting on:
+   - Line 200 in old-service.ts: Style issue in unchanged code (out of scope)
+   - DatabaseService refactoring: Not related to this PR's OAuth changes
+   ```
+
+5. **Ask for approval**:
    ```
    Ready to post this review to the PR?
    - Type 'yes' or 'y' to post all comments
@@ -161,9 +297,9 @@ For each significant change, determine:
    - Suggest specific edits if you want me to modify any comments first
    ```
 
-**Wait for user response** before proceeding to Phase 6.
+**Wait for user response** before proceeding to Phase 7.
 
-### Phase 6: Post Inline Comments (After User Approval)
+### Phase 7: Post Inline Comments (After User Approval)
 
 Only execute this phase after user explicitly approves.
 
@@ -178,11 +314,13 @@ gh pr review <PR_NUMBER> --comment \
 
 **Status**: Ready for detailed inline feedback - please review my comments below
 
-**Overall assessment**: [2-3 sentences on general code quality, approach, and what stands out]
+**Overall assessment**: [2-3 sentences on code quality relative to PR's stated purpose]
+
+**PR Purpose** (from description): [Brief summary of what author intended to do]
 
 **Strengths**:
-- [What's done well - be general here, specifics go in inline comments]
-- [Good architectural decisions]
+- [What's done well - aligned with PR purpose]
+- [Good decisions made]
 
 **Focus areas**: I've left inline comments on specific lines covering:
 - [Number] critical issues (security, bugs)
@@ -192,6 +330,13 @@ gh pr review <PR_NUMBER> --comment \
 **Next steps after addressing comments**:
 1. [Most critical action]
 2. [Second priority]
+
+**Future Considerations** (optional - out of current PR scope):
+- [Refactoring opportunities for future PRs - e.g., "Consider extracting UserService to use dependency injection in a future refactor"]
+- [Architecture improvements - e.g., "The authentication module could benefit from a strategy pattern for multiple auth providers (future enhancement)"]
+- [Technical debt to address later - e.g., "DatabaseService connection pooling should be made configurable (tracked in JIRA-456)"]
+
+*Note: These are NOT blockers for this PR. They're noted for future improvement.*
 
 Please check the inline comments on specific files and lines for detailed feedback!
 
