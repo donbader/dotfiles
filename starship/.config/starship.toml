@@ -1,26 +1,29 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 
 format = """
-[](color_line_1)\
+[](color_line_1)\
 $sudo\
 $os\
 $username\
-[](bg:color_line_2 fg:color_line_1)\
+[](bg:color_line_2 fg:color_line_1)\
 $directory\
-[](fg:color_line_2 bg:color_line_3)\
+[](fg:color_line_2 bg:color_line_3)\
 $git_branch\
 $git_status\
-[](fg:color_line_3 bg:color_line_4)\
+[](fg:color_line_3 bg:color_line_4)\
 $memory_usage\
 $jobs\
-[](fg:color_line_4 bg:color_line_5)\
+[](fg:color_line_4 bg:color_line_5)\
 $docker_context\
 $kubernetes\
 $aws\
-[](fg:color_line_5 bg:color_line_6)\
-$time\
-[ ](fg:color_line_6)\
+[](fg:color_line_5)\
 $line_break$character"""
+
+right_format = """
+[](fg:color_line_6)\
+$time\
+[ ](fg:color_line_6)"""
 
 palette = 'teal_gradient'
 
@@ -40,6 +43,7 @@ color_purple = '#b16286'
 [os]
 disabled = false
 style = "bg:color_line_1 fg:color_fg0"
+format = '[ $symbol]($style)'
 
 [os.symbols]
 Windows = "󰍲"
