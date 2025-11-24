@@ -8,3 +8,4 @@ alias -- -="cd -"
 
 # Shortcuts
 alias reloadrc="source ~/.zshrc"
+alias gp="git push"
