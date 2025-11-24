@@ -1,1 +1,1 @@
-alias sshcode="~/.config/scripts/sshcode.sh"
+alias sshcode="~/scripts/sshcode.sh"
