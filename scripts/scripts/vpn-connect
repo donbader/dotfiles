@@ -163,6 +163,8 @@ connect_vpn() {
 
 # Main
 main() {
+    local start_time=$(date +%s)
+    
     check_dependencies
     
     echo "Fetching VPN profiles..." >&2
@@ -171,7 +173,21 @@ main() {
     
     if [[ -z "$profiles" ]]; then
         echo "Error: No VPN profiles found" >&2
-        echo "Add profiles using: $PRITUNL_CLIENT add <profile_uri>" >&2
+        echo "" >&2
+        echo "To add a profile:" >&2
+        echo "  1. Visit https://vpn.infra.fazzfinancial.com/login" >&2
+        echo "  2. Copy the profile URI from the website" >&2
+        echo "  3. Run: $PRITUNL_CLIENT add <profile_uri>" >&2
+        echo "" >&2
+        read -p "Would you like to add a profile now? (y/n): " answer
+        if [[ "$answer" == "y" || "$answer" == "Y" ]]; then
+            read -p "Enter profile URI: " profile_uri
+            if [[ -n "$profile_uri" ]]; then
+                echo "Adding profile..." >&2
+                "$PRITUNL_CLIENT" add "$profile_uri"
+                echo "Profile added! Re-run this script to connect." >&2
+            fi
+        fi
         exit 1
     fi
     
@@ -212,6 +228,12 @@ main() {
     if ! connect_vpn "$profile_id" "$otp_code"; then
         exit 1
     fi
+    
+    # Calculate and display connection time
+    local end_time=$(date +%s)
+    local duration=$((end_time - start_time))
+    echo "" >&2
+    echo "⏱️  Total connection time: ${duration} seconds" >&2
 }
 
 main "$@"
