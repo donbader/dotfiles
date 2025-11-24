@@ -1,0 +1,93 @@
+[include]
+    path = .gitconfig.credentials
+
+[credential]
+    helper = osxkeychain
+
+[alias]
+
+  ### TODO: frequently use
+  ds = !"tig status"
+
+  # History
+  l = log --graph --abbrev-commit --date=relative --all --format='%C(red)%h -%C(yellow)%d %C(auto)%s %C(blue)%an %C(green)(%ad)'
+  s = status -s
+
+  # commit
+  cm = commit -v
+  co = checkout
+  camd = commit --amend
+  # Add all and commit
+  ca = !"git add -A && git commit -av"
+
+  # branch related
+  b = !"f() { branch=${1:-$(git branch | fzf)}; if [ ! -z $branch ]; then git checkout $branch;fi; }; f"
+  b-remote = !"f() { branch=${1:-$(git branch -r | fzf)}; if [ ! -z $branch ]; then git checkout --track $branch;fi; }; f"
+  cb = "!f() { git checkout $1 2>/dev/null || git checkout -b $1;  }; f"
+  branch-name = "!git rev-parse --abbrev-ref HEAD"
+  branch-remote-name = !git branch -r | fzf | sed -e "s#origin\\/##"
+  d-current-branch-and-co = !"f() { name=$(git branch-name); git checkout ${1:-master}; git branch -D $name; }; f"
+  d-branch = !"f() { git branch -D ${1:-$(git branch | fzf)}; }; f"
+  d-remote-branch = !"f() { git push origin :${1:-$(git branch-remote-name)}; }; f"
+  d-other-branches = "!git branch | grep -v $(git branch-name) | xargs git branch -D"
+  publish = "!git push -u origin $(git branch-name)"
+  unpublish = "!git push origin :$(git branch-name)"
+
+  # Advanced git control
+  rb = !"f() { git stash; git rebase -i HEAD~${1:-2}; git stash pop; }; f"
+  unstage = reset HEAD
+  break-last-to-unstage = !"git reset --soft HEAD~1 && git reset HEAD"
+  recover = !"f() { git reset --hard $1 && git clean -fd; }; f"
+  rbc = !"f() { git rebase --continue; }; f"
+
+  ### Pull
+  # pull-rebase
+  pr = pull --rebase
+  # pull all including submodule
+  pa = !"git pull; git submodule foreach git pull origin master"
+
+  # use theirs
+  use-theirs = !"f(){ git checkout --ours $1; git add $1; }; f"
+
+
+[color]
+
+	# Use colors in Git commands that are capable of colored output when
+	# outputting to the terminal. (This is the default setting in Git ≥ 1.8.4.)
+	ui = auto
+
+[color "branch"]
+
+	current = yellow reverse
+	local = yellow
+	remote = green
+
+[color "diff"]
+
+	meta = yellow bold
+	frag = magenta bold # line info
+	old = red # deletions
+	new = green # additions
+
+[color "status"]
+
+	added = yellow
+	changed = green
+	untracked = cyan
+[core]
+	excludesfile = ~/.gitignore
+	editor = nvim
+	protectNTFS = false
+[user]
+	name = Corey Feng
+	email = corey.feng@fazzfinancial.com
+[pull]
+	rebase = false
+[fetch]
+	prune = true
+
+[filter "lfs"]
+	process = git-lfs filter-process
+	required = true
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
