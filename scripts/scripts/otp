@@ -30,7 +30,7 @@
  *     - Uses AES-256-GCM for encryption
  *     - PBKDF2 key derivation with 600,000 iterations
  *     - Random salt per encryption
- *     - Password cached securely in macOS Keychain for 5 minutes
+ *     - Password cached securely in macOS Keychain for 24 hours
  *     - Password never stored in plaintext files
  *     - Encrypted file safe to commit to git
  */
@@ -47,7 +47,7 @@ const ENCRYPTED_FILE = path.join(SCRIPT_DIR, 'otp_secrets.enc');
 const KDF_ITERATIONS = 600000; // OWASP recommended minimum for PBKDF2
 const KEYCHAIN_SERVICE = 'otp-manager';
 const KEYCHAIN_ACCOUNT = 'master-password-cache';
-const CACHE_TIMEOUT = 5 * 60; // 5 minutes in seconds
+const CACHE_TIMEOUT = 24 * 60 * 60; // 24 hours in seconds
 
 /**
  * Check if password caching is disabled via flag
