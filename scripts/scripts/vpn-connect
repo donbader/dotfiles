@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Paths
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OTP_SCRIPT="${SCRIPT_DIR}/otp"
+PRITUNL_CLIENT="/Applications/Pritunl.app/Contents/Resources/pritunl-client"
+
+# Check dependencies
+check_dependencies() {
+    local missing_deps=()
+    
+    if ! command -v fzf &> /dev/null; then
+        missing_deps+=("fzf")
+    fi
+    
+    if [[ ! -x "$OTP_SCRIPT" ]]; then
+        echo "Error: OTP script not found at $OTP_SCRIPT" >&2
+        exit 1
+    fi
+    
+    if [[ ! -x "$PRITUNL_CLIENT" ]]; then
+        echo "Error: pritunl-client not found at $PRITUNL_CLIENT" >&2
+        echo "Install Pritunl: brew install pritunl" >&2
+        exit 1
+    fi
+    
+    if [[ ${#missing_deps[@]} -gt 0 ]]; then
+        echo "Error: Missing dependencies: ${missing_deps[*]}" >&2
+        echo "Install with: brew install ${missing_deps[*]}" >&2
+        exit 1
+    fi
+}
+
+# Get VPN profiles from pritunl-client
+get_vpn_profiles() {
+    # Get profile list and parse it
+    # Format: ID | NAME | STATE | ...
+    local profiles
+    profiles=$("$PRITUNL_CLIENT" list 2>/dev/null)
+    
+    if [[ -z "$profiles" ]]; then
+        echo "" >&2
+        return 1
+    fi
+    
+    # Parse the table output, skip header and borders
+    # Extract ID and NAME columns (columns 1 and 2)
+    echo "$profiles" | grep -v "^+" | tail -n +2 | while IFS='|' read -r _ id name state _; do
+        # Trim whitespace
+        id=$(echo "$id" | xargs)
+        name=$(echo "$name" | xargs)
+        state=$(echo "$state" | xargs)
+        
+        # Skip header row
+        if [[ "$id" != "ID" && -n "$id" ]]; then
+            echo "${id}|${name}|${state}"
+        fi
+    done
+}
+
+# Get OTP code
+get_otp_code() {
+    local otp_name="$1"
+    local otp_output
+    otp_output=$("$OTP_SCRIPT" get "$otp_name" 2>&1)
+    
+    if [[ $? -ne 0 ]]; then
+        echo "Error: Failed to get OTP code" >&2
+        exit 1
+    fi
+    
+    # Extract the 6-digit code from output
+    local code
+    code=$(echo "$otp_output" | grep -oE '[0-9]{6}' | head -n 1)
+    
+    if [[ -z "$code" ]]; then
+        echo "Error: Could not extract OTP code" >&2
+        exit 1
+    fi
+    
+    echo "$code"
+}
+
+# Connect using pritunl-client start command
+connect_vpn() {
+    local profile_id="$1"
+    local otp_code="$2"
+    
+    echo "Connecting to VPN..." >&2
+    
+    # Use pritunl-client to start the profile with OTP
+    "$PRITUNL_CLIENT" start "$profile_id" --password "$otp_code"
+    
+    local exit_code=$?
+    
+    if [[ $exit_code -eq 0 ]]; then
+        echo "" >&2
+        echo "✓ VPN connected successfully!" >&2
+        return 0
+    else
+        echo "" >&2
+        echo "Error: Failed to connect to VPN (exit code: $exit_code)" >&2
+        return 1
+    fi
+}
+
+# Main
+main() {
+    check_dependencies
+    
+    echo "Fetching VPN profiles..." >&2
+    local profiles
+    profiles=$(get_vpn_profiles)
+    
+    if [[ -z "$profiles" ]]; then
+        echo "Error: No VPN profiles found" >&2
+        echo "Add profiles using: $PRITUNL_CLIENT add <profile_uri>" >&2
+        exit 1
+    fi
+    
+    # Format for fzf display: "name (state)"
+    local profiles_display=""
+    while IFS='|' read -r id name state; do
+        profiles_display+="${name} [${state}]|${id}|${name}"$'\n'
+    done <<< "$profiles"
+    
+    # Select profile using fzf
+    local selected_display
+    selected_display=$(echo "$profiles_display" | cut -d'|' -f1 | fzf --prompt="Select VPN profile: " --height=40% --reverse)
+    
+    if [[ -z "$selected_display" ]]; then
+        echo "No profile selected" >&2
+        exit 1
+    fi
+    
+    # Extract profile ID from selection
+    local profile_line
+    profile_line=$(echo "$profiles_display" | grep -F "${selected_display}|" | head -n 1)
+    
+    local profile_id=$(echo "$profile_line" | cut -d'|' -f2)
+    local profile_name=$(echo "$profile_line" | cut -d'|' -f3)
+    
+    echo "Selected: $profile_name" >&2
+    echo "" >&2
+    
+    # Get OTP code
+    echo "Fetching OTP code..." >&2
+    local otp_code
+    otp_code=$(get_otp_code "vpn")
+    
+    echo "✓ Got OTP: $otp_code" >&2
+    echo "" >&2
+    
+    # Connect to VPN
+    if ! connect_vpn "$profile_id" "$otp_code"; then
+        exit 1
+    fi
+}
+
+main "$@"
