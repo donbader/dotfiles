@@ -83,6 +83,14 @@ get_otp_code() {
     echo "$code"
 }
 
+# Get profile connection status
+get_profile_status() {
+    local profile_id="$1"
+    
+    # Get the "ONLINE FOR" column for this profile (column 6, not 5!)
+    "$PRITUNL_CLIENT" list 2>/dev/null | grep -F "$profile_id" | awk -F'|' '{print $6}' | xargs
+}
+
 # Connect using pritunl-client start command
 connect_vpn() {
     local profile_id="$1"
@@ -91,17 +99,64 @@ connect_vpn() {
     echo "Connecting to VPN..." >&2
     
     # Use pritunl-client to start the profile with OTP
-    "$PRITUNL_CLIENT" start "$profile_id" --password "$otp_code"
+    "$PRITUNL_CLIENT" start "$profile_id" --password "$otp_code" 2>&1
     
     local exit_code=$?
     
-    if [[ $exit_code -eq 0 ]]; then
+    if [[ $exit_code -ne 0 ]]; then
         echo "" >&2
+        echo "Error: Failed to initiate VPN connection (exit code: $exit_code)" >&2
+        return 1
+    fi
+    
+    # Wait for connection to establish
+    echo "Waiting for connection to establish..." >&2
+    
+    local max_wait=30
+    local waited=0
+    local connected=false
+    
+    while [[ $waited -lt $max_wait ]]; do
+        local status=$(get_profile_status "$profile_id")
+        
+        # Check if status shows a time duration (e.g., "5 secs", "1 min", "2 hours")
+        # or contains "sec", "min", "hour" which indicates connected
+        if [[ "$status" == *"sec"* || "$status" == *"min"* || "$status" == *"hour"* ]]; then
+            connected=true
+            break
+        elif [[ "$status" == "Connecting" || "$status" == "Disconnected" ]]; then
+            # Still connecting, wait a bit
+            sleep 1
+            waited=$((waited + 1))
+            echo -n "." >&2
+        else
+            # Unknown status, keep waiting
+            sleep 1
+            waited=$((waited + 1))
+            echo -n "." >&2
+        fi
+    done
+    
+    echo "" >&2
+    
+    if [[ "$connected" == true ]]; then
         echo "✓ VPN connected successfully!" >&2
+        
+        # Show connection details
+        "$PRITUNL_CLIENT" list 2>/dev/null | grep -F "$profile_id" | awk -F'|' '{
+            gsub(/^[ \t]+|[ \t]+$/, "", $6);
+            gsub(/^[ \t]+|[ \t]+$/, "", $7);
+            gsub(/^[ \t]+|[ \t]+$/, "", $8);
+            print "  Online for: " $6;
+            print "  Server: " $7;
+            print "  Client IP: " $8;
+        }' >&2
+        
         return 0
     else
-        echo "" >&2
-        echo "Error: Failed to connect to VPN (exit code: $exit_code)" >&2
+        local final_status=$(get_profile_status "$profile_id")
+        echo "Error: VPN connection timed out after ${max_wait} seconds" >&2
+        echo "Current status: $final_status" >&2
         return 1
     fi
 }
