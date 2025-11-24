@@ -68,7 +68,7 @@ Expected format: `STRAITSX-1234/my-service-do-something`
 
 6. **Create the PR**:
    ```bash
-   gh pr create --title "..." --body "..."
+   gh pr create --title "..." --body "..." --assignee @me
    ```
 
 ## Important Notes
