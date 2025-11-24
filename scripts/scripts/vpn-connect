@@ -6,6 +6,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OTP_SCRIPT="${SCRIPT_DIR}/otp"
 PRITUNL_CLIENT="/Applications/Pritunl.app/Contents/Resources/pritunl-client"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/vpn-connect"
+LAST_PROFILE_FILE="${CACHE_DIR}/last_profile"
 
 # Check dependencies
 check_dependencies() {
@@ -58,6 +60,44 @@ get_vpn_profiles() {
             echo "${id}|${name}|${state}"
         fi
     done
+}
+
+# Save the selected profile ID
+save_last_profile() {
+    local profile_id="$1"
+    mkdir -p "$CACHE_DIR"
+    echo "$profile_id" > "$LAST_PROFILE_FILE"
+}
+
+# Get the last selected profile ID
+get_last_profile() {
+    if [[ -f "$LAST_PROFILE_FILE" ]]; then
+        cat "$LAST_PROFILE_FILE"
+    fi
+}
+
+# Reorder profiles to put last selected first
+reorder_profiles() {
+    local profiles="$1"
+    local last_profile="$2"
+    
+    if [[ -z "$last_profile" ]]; then
+        echo "$profiles"
+        return
+    fi
+    
+    # Find the last selected profile line
+    local last_line=$(echo "$profiles" | grep "^${last_profile}|")
+    
+    if [[ -z "$last_line" ]]; then
+        # Last profile not found, return original order
+        echo "$profiles"
+        return
+    fi
+    
+    # Put last profile first, then all others
+    echo "$last_line"
+    echo "$profiles" | grep -v "^${last_profile}|"
 }
 
 # Get OTP code
@@ -191,6 +231,10 @@ main() {
         exit 1
     fi
     
+    # Reorder profiles to put last selected first
+    local last_profile=$(get_last_profile)
+    profiles=$(reorder_profiles "$profiles" "$last_profile")
+    
     # Format for fzf display: "name (state)"
     local profiles_display=""
     while IFS='|' read -r id name state; do
@@ -212,6 +256,9 @@ main() {
     
     local profile_id=$(echo "$profile_line" | cut -d'|' -f2)
     local profile_name=$(echo "$profile_line" | cut -d'|' -f3)
+    
+    # Save this as the last selected profile
+    save_last_profile "$profile_id"
     
     echo "Selected: $profile_name" >&2
     echo "" >&2
