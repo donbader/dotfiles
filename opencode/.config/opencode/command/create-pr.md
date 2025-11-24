@@ -71,7 +71,7 @@ Expected format: `STRAITSX-1234/my-service-do-something`
 
 6. **Push and create PR**:
    - Push branch to remote if needed: `git push -u origin HEAD`
-   - Create the PR with self-assignment: `gh pr create --title "..." --body "..." --assignee @me`
+   - Create the **draft** PR with self-assignment: `gh pr create --draft --title "..." --body "..." --assignee @me`
    
    **IMPORTANT**: If both push and PR creation are needed, use a single Bash tool call with both commands separated by `&&`.
 
