@@ -26,10 +26,13 @@ Expected format: `STRAITSX-1234/my-service-do-something`
 
 ## Workflow
 
-1. **Get current branch name**
-   ```bash
-   git rev-parse --abbrev-ref HEAD
-   ```
+1. **Gather information in parallel using Bash tool** (execute all these commands in a single Bash call):
+   - Get current branch name: `git rev-parse --abbrev-ref HEAD`
+   - Get commit history: `git log main..HEAD`
+   - Get code changes: `git diff main...HEAD`
+   - Check remote tracking: `git status -sb`
+   
+   **IMPORTANT**: Use a single Bash tool call with multiple commands separated by `&&` or `;` to execute in parallel.
 
 2. **Parse branch name** to extract:
    - JIRA ID (e.g., `STRAITSX-1234`)
@@ -66,15 +69,17 @@ Expected format: `STRAITSX-1234/my-service-do-something`
 
    ```
 
-6. **Create the PR**:
-   ```bash
-   gh pr create --title "..." --body "..." --assignee @me
-   ```
+6. **Push and create PR**:
+   - Push branch to remote if needed: `git push -u origin HEAD`
+   - Create the PR with self-assignment: `gh pr create --title "..." --body "..." --assignee @me`
+   
+   **IMPORTANT**: If both push and PR creation are needed, use a single Bash tool call with both commands separated by `&&`.
 
 ## Important Notes
 
 - If branch name doesn't match expected format, ask user for clarification
 - **Title must be based on actual changes, NOT branch name formatting**
+- **Use single Bash tool calls with multiple commands** to maximize parallel execution efficiency
 - Analyze ALL commits in the branch, not just the latest one
 - Read the actual code diff to understand what was implemented
 - Determine the most appropriate type based on the overall change
