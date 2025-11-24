@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Paths
+PRITUNL_CLIENT="/Applications/Pritunl.app/Contents/Resources/pritunl-client"
+
+# Check dependencies
+check_dependencies() {
+    if [[ ! -x "$PRITUNL_CLIENT" ]]; then
+        echo "Error: pritunl-client not found at $PRITUNL_CLIENT" >&2
+        echo "Install Pritunl: brew install pritunl" >&2
+        exit 1
+    fi
+    
+    if ! command -v fzf &> /dev/null; then
+        echo "Error: fzf not installed" >&2
+        echo "Install with: brew install fzf" >&2
+        exit 1
+    fi
+}
+
+# Get active VPN profiles
+get_active_profiles() {
+    # Get only Active profiles
+    "$PRITUNL_CLIENT" list 2>/dev/null | grep "Active" | while IFS='|' read -r _ id name state _; do
+        # Trim whitespace
+        id=$(echo "$id" | xargs)
+        name=$(echo "$name" | xargs)
+        state=$(echo "$state" | xargs)
+        
+        if [[ -n "$id" && "$id" != "ID" ]]; then
+            echo "${id}|${name}"
+        fi
+    done
+}
+
+# Get profile connection status
+get_profile_status() {
+    local profile_id="$1"
+    
+    # Get the "ONLINE FOR" column for this profile (column 6)
+    "$PRITUNL_CLIENT" list 2>/dev/null | grep -F "$profile_id" | awk -F'|' '{print $6}' | xargs
+}
+
+# Disconnect VPN
+disconnect_vpn() {
+    local profile_id="$1"
+    
+    echo "Disconnecting VPN..." >&2
+    
+    # Stop the profile
+    "$PRITUNL_CLIENT" stop "$profile_id" 2>&1
+    
+    local exit_code=$?
+    
+    if [[ $exit_code -ne 0 ]]; then
+        echo "" >&2
+        echo "Error: Failed to disconnect VPN (exit code: $exit_code)" >&2
+        return 1
+    fi
+    
+    # Wait for disconnection to complete
+    echo "Waiting for disconnection..." >&2
+    
+    local max_wait=10
+    local waited=0
+    local disconnected=false
+    
+    while [[ $waited -lt $max_wait ]]; do
+        local status=$(get_profile_status "$profile_id")
+        
+        if [[ "$status" == "Disconnected" ]]; then
+            disconnected=true
+            break
+        else
+            sleep 1
+            waited=$((waited + 1))
+            echo -n "." >&2
+        fi
+    done
+    
+    echo "" >&2
+    
+    if [[ "$disconnected" == true ]]; then
+        echo "✓ VPN disconnected successfully!" >&2
+        return 0
+    else
+        echo "Warning: Disconnection may still be in progress" >&2
+        return 0
+    fi
+}
+
+# Main
+main() {
+    check_dependencies
+    
+    echo "Fetching active VPN connections..." >&2
+    local profiles
+    profiles=$(get_active_profiles)
+    
+    if [[ -z "$profiles" ]]; then
+        echo "No active VPN connections found" >&2
+        exit 0
+    fi
+    
+    # Count active profiles
+    local profile_count=$(echo "$profiles" | wc -l | xargs)
+    
+    if [[ "$profile_count" == "1" ]]; then
+        # Only one active profile, disconnect it directly
+        local profile_id=$(echo "$profiles" | cut -d'|' -f1)
+        local profile_name=$(echo "$profiles" | cut -d'|' -f2)
+        
+        echo "Disconnecting: $profile_name" >&2
+        echo "" >&2
+        
+        if ! disconnect_vpn "$profile_id"; then
+            exit 1
+        fi
+    else
+        # Multiple active profiles, use fzf to select
+        local profiles_display=""
+        while IFS='|' read -r id name; do
+            profiles_display+="${name}|${id}"$'\n'
+        done <<< "$profiles"
+        
+        local selected_display
+        selected_display=$(echo "$profiles_display" | cut -d'|' -f1 | fzf --prompt="Select VPN to disconnect: " --height=40% --reverse)
+        
+        if [[ -z "$selected_display" ]]; then
+            echo "No profile selected" >&2
+            exit 1
+        fi
+        
+        local profile_line
+        profile_line=$(echo "$profiles_display" | grep -F "${selected_display}|" | head -n 1)
+        
+        local profile_id=$(echo "$profile_line" | cut -d'|' -f2)
+        
+        echo "Selected: $selected_display" >&2
+        echo "" >&2
+        
+        if ! disconnect_vpn "$profile_id"; then
+            exit 1
+        fi
+    fi
+}
+
+main "$@"
