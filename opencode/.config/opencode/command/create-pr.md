@@ -76,16 +76,44 @@ Expected format: `STRAITSX-1234/my-service-do-something`
    [STRAITSX-1234](https://fazzfinancial.atlassian.net/browse/STRAITSX-1234)
 
    ## Summary
-   Brief overview of what this PR does (2-3 sentences)
+   [2-3 sentences explaining WHAT was changed and WHY. Focus on business value and context, not implementation details]
 
    ## Changes
-   - Bullet point of key change 1
-   - Bullet point of key change 2
-   - Bullet point of key change 3
+   [List key technical changes organized by area/file. Be specific about what was modified]
+   - **[Area/Component]**: [Specific change and reason]
+   - **[Area/Component]**: [Specific change and reason]
+   - **[Area/Component]**: [Specific change and reason]
+
+   ## Testing
+   [Describe how changes were verified - unit tests, integration tests, manual testing]
+   - [ ] Unit tests added/updated
+   - [ ] Integration tests added/updated
+   - [ ] Manual testing completed
+   - [ ] Edge cases considered
+
+   ## Deployment Notes
+   [Any special considerations for deployment - remove section if none apply]
+   - [ ] Database migrations required
+   - [ ] Configuration changes needed
+   - [ ] Breaking changes (document what breaks)
+   - [ ] Feature flags involved
+   - [ ] Dependencies updated
+
+   ## Reviewer Focus
+   [Guide reviewers on what to pay attention to]
+   - [Specific area or concern to review carefully]
+   - [Trade-offs or design decisions made]
+   - [Areas where feedback is particularly wanted]
 
    ```
    
-   **Note**: Customize the JIRA URL template for your organization if needed.
+   **Important guidelines:**
+   - Write descriptions in complete sentences with proper context
+   - Be specific - avoid vague terms like "updated", "fixed", "improved" without details
+   - Use checkboxes `[ ]` for items that need verification
+   - Remove sections that don't apply rather than leaving them empty
+   - Focus on WHY changes were made, not just WHAT changed
+   - Customize the JIRA URL template for your organization if needed
 
 7. **Push and create PR**:
    - Push branch to remote if needed: `git push -u origin HEAD`
