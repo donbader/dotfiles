@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Extract SSH hosts from ~/.ssh/config
+get_ssh_hosts() {
+    if [[ ! -f ~/.ssh/config ]]; then
+        echo "Error: ~/.ssh/config not found" >&2
+        exit 1
+    fi
+
+    # Extract Host entries (excluding wildcards)
+    grep -E "^Host " ~/.ssh/config | \
+        awk '{print $2}' | \
+        grep -v '\*'
+}
+
+# Get list of directories on remote host
+get_remote_dirs() {
+    local host="$1"
+
+    # Get home directory and list directories from there
+    ssh "$host" bash <<'EOF'
+        # Start from home directory
+        cd ~ || exit 1
+
+        # Find directories, including hidden ones
+        find . -maxdepth 3 -type d 2>/dev/null | \
+            sed 's|^\./||' | \
+            sed "s|^|$HOME/|" | \
+            grep -v "^$HOME/$" | \
+            head -n 1000
+
+        # Also add home directory itself
+        echo "$HOME"
+EOF
+}
+
+main() {
+    # Check if fzf is installed
+    if ! command -v fzf &> /dev/null; then
+        echo "Error: fzf is not installed. Install it with: brew install fzf" >&2
+        exit 1
+    fi
+
+    # Step 1: Select SSH host
+    echo "Fetching SSH hosts from ~/.ssh/config..." >&2
+    ssh_host=$(get_ssh_hosts | fzf --prompt="Select SSH host: " --height=40% --reverse)
+
+    if [[ -z "$ssh_host" ]]; then
+        echo "No host selected. Exiting." >&2
+        exit 1
+    fi
+
+    echo "Selected host: $ssh_host" >&2
+
+    # Step 2: Select remote directory
+    echo "Fetching directories from $ssh_host..." >&2
+    dirs=$(get_remote_dirs "$ssh_host")
+
+    if [[ -z "$dirs" ]]; then
+        echo "Error: Could not fetch directories from $ssh_host" >&2
+        exit 1
+    fi
+
+    remote_dir=$(echo "$dirs" | fzf --prompt="Select remote directory: " --height=40% --reverse)
+
+    if [[ -z "$remote_dir" ]]; then
+        echo "No directory selected. Exiting." >&2
+        exit 1
+    fi
+
+    echo "Selected directory: $remote_dir" >&2
+
+    # Step 3: Open in VS Code
+    vscode_uri="vscode-remote://ssh-remote+${ssh_host}${remote_dir}"
+    echo "Opening VS Code with URI: $vscode_uri" >&2
+
+    code --folder-uri "$vscode_uri"
+}
+
+main "$@"
