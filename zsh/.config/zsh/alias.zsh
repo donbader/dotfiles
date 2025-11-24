@@ -8,7 +8,3 @@ alias -- -="cd -"
 
 # Shortcuts
 alias reloadrc="source ~/.zshrc"
-
-# Error correcting
-alias gti=git
-alias vim=nvim
