@@ -7,6 +7,7 @@
  * 
  * Requirements:
  *     None - uses built-in Node.js crypto module
+ *     macOS Keychain (for password caching)
  * 
  * Usage:
  *     ./otp add <name> <secret>     Add/update OTP secret
@@ -14,17 +15,23 @@
  *     ./otp list                    List all services
  *     ./otp remove <name>           Remove a secret
  *     ./otp export                  Export all secrets (plaintext)
+ *     ./otp clear-cache             Clear cached password
+ * 
+ * Options:
+ *     --no-cache                    Don't use password cache
  * 
  * Example:
  *     ./otp add github JBSWY3DPEHPK3PXP
  *     ./otp get github
  *     # Output: Current OTP for 'github': 123456 (valid for 23 seconds)
+ *     # (Password cached for 5 minutes)
  * 
  * Security:
  *     - Uses AES-256-GCM for encryption
  *     - PBKDF2 key derivation with 600,000 iterations
  *     - Random salt per encryption
- *     - Password never stored, only used in memory
+ *     - Password cached securely in macOS Keychain for 5 minutes
+ *     - Password never stored in plaintext files
  *     - Encrypted file safe to commit to git
  */
 
@@ -32,16 +39,95 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const { execSync } = require('child_process');
 
 // Configuration
 const SCRIPT_DIR = __dirname;
 const ENCRYPTED_FILE = path.join(SCRIPT_DIR, 'otp_secrets.enc');
 const KDF_ITERATIONS = 600000; // OWASP recommended minimum for PBKDF2
+const KEYCHAIN_SERVICE = 'otp-manager';
+const KEYCHAIN_ACCOUNT = 'master-password-cache';
+const CACHE_TIMEOUT = 5 * 60; // 5 minutes in seconds
+
+/**
+ * Check if password caching is disabled via flag
+ */
+function isCacheDisabled() {
+    return process.argv.includes('--no-cache');
+}
+
+/**
+ * Store password in macOS Keychain with timeout
+ */
+function cachePassword(password) {
+    if (isCacheDisabled()) return;
+    
+    try {
+        // Delete existing entry first (ignore errors)
+        try {
+            execSync(`security delete-generic-password -s "${KEYCHAIN_SERVICE}" -a "${KEYCHAIN_ACCOUNT}" 2>/dev/null`);
+        } catch (e) {}
+        
+        // Add password to keychain with timestamp
+        const data = JSON.stringify({
+            password: password,
+            timestamp: Date.now()
+        });
+        
+        execSync(`security add-generic-password -s "${KEYCHAIN_SERVICE}" -a "${KEYCHAIN_ACCOUNT}" -w "${data.replace(/"/g, '\\"')}"`, {
+            stdio: 'pipe'
+        });
+    } catch (error) {
+        // Silently fail - caching is optional
+    }
+}
+
+/**
+ * Retrieve cached password from macOS Keychain
+ */
+function getCachedPassword() {
+    if (isCacheDisabled()) return null;
+    
+    try {
+        const result = execSync(`security find-generic-password -s "${KEYCHAIN_SERVICE}" -a "${KEYCHAIN_ACCOUNT}" -w 2>/dev/null`, {
+            encoding: 'utf8',
+            stdio: 'pipe'
+        }).trim();
+        
+        const data = JSON.parse(result);
+        
+        // Check if cache has expired
+        const age = (Date.now() - data.timestamp) / 1000; // in seconds
+        if (age > CACHE_TIMEOUT) {
+            clearPasswordCache();
+            return null;
+        }
+        
+        return data.password;
+    } catch (error) {
+        return null;
+    }
+}
+
+/**
+ * Clear cached password from Keychain
+ */
+function clearPasswordCache() {
+    try {
+        execSync(`security delete-generic-password -s "${KEYCHAIN_SERVICE}" -a "${KEYCHAIN_ACCOUNT}" 2>/dev/null`);
+    } catch (e) {}
+}
 
 /**
  * Prompts for password input (hidden)
  */
 function getPassword(prompt = 'Enter master password: ') {
+    // Try to get cached password first
+    const cached = getCachedPassword();
+    if (cached) {
+        return Promise.resolve(cached);
+    }
+    
     return new Promise((resolve, reject) => {
         const { execSync } = require('child_process');
         
@@ -90,6 +176,8 @@ function getPassword(prompt = 'Enter master password: ') {
                 if (!password || password.length === 0) {
                     reject(new Error('Password cannot be empty'));
                 } else {
+                    // Cache the password for future use
+                    cachePassword(password);
                     resolve(password);
                 }
             } else {
@@ -260,8 +348,16 @@ async function loadSecrets(password) {
         return {};
     }
     
-    const plaintext = decrypt(encryptedData, password);
-    return JSON.parse(plaintext);
+    try {
+        const plaintext = decrypt(encryptedData, password);
+        // Password was correct, cache it
+        cachePassword(password);
+        return JSON.parse(plaintext);
+    } catch (error) {
+        // Wrong password, clear cache
+        clearPasswordCache();
+        throw error;
+    }
 }
 
 /**
@@ -483,11 +579,16 @@ Usage:
     otp list                    List all services
     otp remove <name>           Remove a secret
     otp export                  Export all secrets (plaintext)
+    otp clear-cache             Clear cached password
+
+Options:
+    --no-cache                  Don't use password cache for this operation
 
 Examples:
     otp add github JBSWY3DPEHPK3PXP
     otp get github
     otp list
+    otp get github --no-cache   # Force password prompt
     `);
 }
 
@@ -495,7 +596,7 @@ Examples:
  * Main entry point
  */
 async function main() {
-    const args = process.argv.slice(2);
+    const args = process.argv.slice(2).filter(arg => !arg.startsWith('--'));
     
     if (args.length === 0) {
         printUsage();
@@ -538,6 +639,12 @@ async function main() {
             
             case 'export':
                 success = await exportSecrets();
+                break;
+            
+            case 'clear-cache':
+                clearPasswordCache();
+                console.log('✓ Password cache cleared');
+                success = true;
                 break;
             
             default:
