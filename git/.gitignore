@@ -17,3 +17,8 @@ Thumbs.db
 _corey_*
 _corey/*
 _corey*/
+
+# OTP Manager - ignore any plaintext secrets (just in case)
+# The encrypted file (otp_secrets.enc) is safe to commit
+otp_secrets.json
+otp_secrets.txt

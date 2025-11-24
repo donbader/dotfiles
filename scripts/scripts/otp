@@ -1,0 +1,561 @@
+#!/usr/bin/env node
+/**
+ * Secure OTP Manager - Store and retrieve OTP secrets with encryption
+ * 
+ * This script manages TOTP (Time-based One-Time Password) secrets in an encrypted file.
+ * The encrypted file can be safely committed to version control.
+ * 
+ * Requirements:
+ *     None - uses built-in Node.js crypto module
+ * 
+ * Usage:
+ *     ./otp add <name> <secret>     Add/update OTP secret
+ *     ./otp get <name>              Generate OTP code
+ *     ./otp list                    List all services
+ *     ./otp remove <name>           Remove a secret
+ *     ./otp export                  Export all secrets (plaintext)
+ * 
+ * Example:
+ *     ./otp add github JBSWY3DPEHPK3PXP
+ *     ./otp get github
+ *     # Output: Current OTP for 'github': 123456 (valid for 23 seconds)
+ * 
+ * Security:
+ *     - Uses AES-256-GCM for encryption
+ *     - PBKDF2 key derivation with 600,000 iterations
+ *     - Random salt per encryption
+ *     - Password never stored, only used in memory
+ *     - Encrypted file safe to commit to git
+ */
+
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const readline = require('readline');
+
+// Configuration
+const SCRIPT_DIR = __dirname;
+const ENCRYPTED_FILE = path.join(SCRIPT_DIR, 'otp_secrets.enc');
+const KDF_ITERATIONS = 600000; // OWASP recommended minimum for PBKDF2
+
+/**
+ * Prompts for password input (hidden)
+ */
+function getPassword(prompt = 'Enter master password: ') {
+    return new Promise((resolve, reject) => {
+        const { execSync } = require('child_process');
+        
+        // Use /dev/tty to ensure we can always read password even if stdout is redirected
+        const ttyFd = fs.openSync('/dev/tty', 'r+');
+        const input = fs.createReadStream(null, { fd: ttyFd });
+        const output = fs.createWriteStream(null, { fd: ttyFd });
+        
+        // Write prompt
+        output.write(prompt);
+        
+        // Disable echo using stty
+        try {
+            execSync('stty -echo', { stdio: ['inherit', 'inherit', 'inherit'] });
+        } catch (e) {
+            // If stty fails, continue anyway
+        }
+        
+        let password = '';
+        let resolved = false;
+        
+        input.on('data', (chunk) => {
+            if (resolved) return;
+            
+            const str = chunk.toString();
+            
+            // Check for newline/return anywhere in the chunk
+            const newlineIndex = str.search(/[\n\r]/);
+            
+            if (newlineIndex !== -1) {
+                // Add everything before the newline to password
+                password += str.substring(0, newlineIndex);
+                
+                // Re-enable echo
+                try {
+                    execSync('stty echo', { stdio: ['inherit', 'inherit', 'inherit'] });
+                } catch (e) {}
+                
+                output.write('\n');
+                input.destroy();
+                output.destroy();
+                
+                resolved = true;
+                
+                // Validate password is not empty
+                if (!password || password.length === 0) {
+                    reject(new Error('Password cannot be empty'));
+                } else {
+                    resolve(password);
+                }
+            } else {
+                password += str;
+            }
+        });
+        
+        input.on('error', (err) => {
+            if (resolved) return;
+            // Re-enable echo on error
+            try {
+                execSync('stty echo', { stdio: ['inherit', 'inherit', 'inherit'] });
+            } catch (e) {}
+            resolved = true;
+            reject(err);
+        });
+        
+        // Handle Ctrl+C
+        const sigintHandler = () => {
+            if (resolved) return;
+            try {
+                execSync('stty echo', { stdio: ['inherit', 'inherit', 'inherit'] });
+            } catch (e) {}
+            output.write('\n');
+            resolved = true;
+            reject(new Error('Cancelled'));
+        };
+        
+        process.on('SIGINT', sigintHandler);
+    });
+}
+
+/**
+ * Prompts for confirmation
+ */
+function confirm(prompt) {
+    return new Promise((resolve) => {
+        const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+        });
+
+        rl.question(prompt, (answer) => {
+            rl.close();
+            resolve(answer.toLowerCase() === 'yes');
+        });
+    });
+}
+
+/**
+ * Derive encryption key from password using PBKDF2
+ */
+function deriveKey(password, salt) {
+    return crypto.pbkdf2Sync(password, salt, KDF_ITERATIONS, 32, 'sha256');
+}
+
+/**
+ * Create password verification hash
+ */
+function createPasswordHash(password, salt) {
+    return crypto.pbkdf2Sync(password, salt, KDF_ITERATIONS, 32, 'sha256');
+}
+
+/**
+ * Encrypt plaintext with password
+ */
+function encrypt(plaintext, password) {
+    // Generate random salt and IV
+    const salt = crypto.randomBytes(16);
+    const iv = crypto.randomBytes(12);
+    
+    // Derive key from password
+    const key = deriveKey(password, salt);
+    
+    // Create password verification hash using a different salt
+    const hashSalt = crypto.randomBytes(16);
+    const passwordHash = createPasswordHash(password, hashSalt);
+    
+    // Encrypt using AES-256-GCM
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    
+    let encrypted = cipher.update(plaintext, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    
+    // Get authentication tag
+    const authTag = cipher.getAuthTag();
+    
+    // Combine hashSalt + passwordHash + salt + iv + authTag + ciphertext
+    const combined = Buffer.concat([
+        hashSalt,           // 16 bytes
+        passwordHash,       // 32 bytes
+        salt,              // 16 bytes
+        iv,                // 12 bytes
+        authTag,           // 16 bytes
+        Buffer.from(encrypted, 'hex')
+    ]);
+    
+    return combined.toString('base64');
+}
+
+/**
+ * Decrypt ciphertext with password
+ */
+function decrypt(encryptedB64, password) {
+    try {
+        // Decode from base64
+        const encryptedData = Buffer.from(encryptedB64, 'base64');
+        
+        // Check if this is the new format (with password hash) or old format
+        const hasPasswordHash = encryptedData.length >= 92; // Min size with hash
+        
+        let salt, iv, authTag, ciphertext;
+        
+        if (hasPasswordHash && encryptedData.length >= 92) {
+            // Try new format first: hashSalt(16) + passwordHash(32) + salt(16) + iv(12) + authTag(16) + ciphertext
+            const hashSalt = encryptedData.slice(0, 16);
+            const storedPasswordHash = encryptedData.slice(16, 48);
+            
+            // Verify password before attempting decryption
+            const passwordHash = createPasswordHash(password, hashSalt);
+            if (!crypto.timingSafeEqual(passwordHash, storedPasswordHash)) {
+                throw new Error('Incorrect password');
+            }
+            
+            // Extract remaining components
+            salt = encryptedData.slice(48, 64);
+            iv = encryptedData.slice(64, 76);
+            authTag = encryptedData.slice(76, 92);
+            ciphertext = encryptedData.slice(92);
+        } else {
+            // Old format: salt(16) + iv(12) + authTag(16) + ciphertext
+            salt = encryptedData.slice(0, 16);
+            iv = encryptedData.slice(16, 28);
+            authTag = encryptedData.slice(28, 44);
+            ciphertext = encryptedData.slice(44);
+        }
+        
+        // Derive key from password
+        const key = deriveKey(password, salt);
+        
+        // Decrypt using AES-256-GCM
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+        decipher.setAuthTag(authTag);
+        
+        let decrypted = decipher.update(ciphertext, null, 'utf8');
+        decrypted += decipher.final('utf8');
+        
+        return decrypted;
+    } catch (error) {
+        if (error.message === 'Incorrect password') {
+            throw new Error('Incorrect password');
+        }
+        throw new Error('Decryption failed. Incorrect password or corrupted file.');
+    }
+}
+
+/**
+ * Load and decrypt secrets from file
+ */
+async function loadSecrets(password) {
+    if (!fs.existsSync(ENCRYPTED_FILE)) {
+        return {};
+    }
+    
+    const encryptedData = fs.readFileSync(ENCRYPTED_FILE, 'utf8').trim();
+    
+    if (!encryptedData) {
+        return {};
+    }
+    
+    const plaintext = decrypt(encryptedData, password);
+    return JSON.parse(plaintext);
+}
+
+/**
+ * Encrypt and save secrets to file
+ */
+function saveSecrets(secrets, password) {
+    const plaintext = JSON.stringify(secrets, null, 2);
+    const encryptedData = encrypt(plaintext, password);
+    fs.writeFileSync(ENCRYPTED_FILE, encryptedData, 'utf8');
+}
+
+/**
+ * Base32 decoder for TOTP secrets
+ */
+function base32Decode(input) {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    const cleanInput = input.replace(/=+$/, '').toUpperCase();
+    
+    let bits = '';
+    for (let i = 0; i < cleanInput.length; i++) {
+        const val = alphabet.indexOf(cleanInput[i]);
+        if (val === -1) throw new Error('Invalid base32 character');
+        bits += val.toString(2).padStart(5, '0');
+    }
+    
+    const bytes = [];
+    for (let i = 0; i + 8 <= bits.length; i += 8) {
+        bytes.push(parseInt(bits.slice(i, i + 8), 2));
+    }
+    
+    return Buffer.from(bytes);
+}
+
+/**
+ * Generate TOTP code
+ */
+function generateTOTP(secret, timeStep = 30) {
+    try {
+        // Clean and decode secret
+        const cleanSecret = secret.replace(/\s/g, '').toUpperCase();
+        const key = base32Decode(cleanSecret);
+        
+        // Calculate time counter
+        const now = Math.floor(Date.now() / 1000);
+        const counter = Math.floor(now / timeStep);
+        
+        // Create counter buffer (8 bytes, big-endian)
+        const counterBuffer = Buffer.alloc(8);
+        counterBuffer.writeBigInt64BE(BigInt(counter));
+        
+        // Generate HMAC
+        const hmac = crypto.createHmac('sha1', key);
+        hmac.update(counterBuffer);
+        const digest = hmac.digest();
+        
+        // Dynamic truncation
+        const offset = digest[digest.length - 1] & 0x0f;
+        const code = (
+            ((digest[offset] & 0x7f) << 24) |
+            ((digest[offset + 1] & 0xff) << 16) |
+            ((digest[offset + 2] & 0xff) << 8) |
+            (digest[offset + 3] & 0xff)
+        ) % 1000000;
+        
+        // Time remaining
+        const timeRemaining = timeStep - (now % timeStep);
+        
+        return {
+            code: code.toString().padStart(6, '0'),
+            timeRemaining
+        };
+    } catch (error) {
+        throw new Error('Invalid TOTP secret format');
+    }
+}
+
+/**
+ * Add or update an OTP secret
+ */
+async function addSecret(name, secret) {
+    try {
+        const password = await getPassword();
+        
+        // Validate the secret by trying to generate a TOTP
+        const cleanSecret = secret.replace(/\s/g, '').toUpperCase();
+        generateTOTP(cleanSecret); // Will throw if invalid
+        
+        const secrets = await loadSecrets(password);
+        secrets[name] = cleanSecret;
+        saveSecrets(secrets, password);
+        
+        console.log(`✓ Secret for '${name}' saved successfully`);
+        return true;
+    } catch (error) {
+        console.error(`Error: ${error.message}`);
+        return false;
+    }
+}
+
+/**
+ * Get current OTP code for a service
+ */
+async function getOTP(name) {
+    try {
+        const password = await getPassword();
+        const secrets = await loadSecrets(password);
+        
+        if (!(name in secrets)) {
+            console.error(`Error: No secret found for '${name}'`);
+            console.error(`Available services: ${Object.keys(secrets).join(', ')}`);
+            return false;
+        }
+        
+        const secret = secrets[name];
+        const { code, timeRemaining } = generateTOTP(secret);
+        
+        console.log(`\nCurrent OTP for '${name}': ${code}`);
+        console.log(`Valid for ${timeRemaining} seconds`);
+        return true;
+    } catch (error) {
+        console.error(`Error: ${error.message}`);
+        return false;
+    }
+}
+
+/**
+ * List all stored services
+ */
+async function listServices() {
+    try {
+        const password = await getPassword();
+        const secrets = await loadSecrets(password);
+        
+        const services = Object.keys(secrets);
+        
+        if (services.length === 0) {
+            console.log('No services stored yet.');
+            return true;
+        }
+        
+        console.log(`\nStored services (${services.length}):`);
+        services.sort().forEach(name => {
+            console.log(`  - ${name}`);
+        });
+        return true;
+    } catch (error) {
+        console.error(`Error: ${error.message}`);
+        return false;
+    }
+}
+
+/**
+ * Remove a secret
+ */
+async function removeSecret(name) {
+    try {
+        const password = await getPassword();
+        const secrets = await loadSecrets(password);
+        
+        if (!(name in secrets)) {
+            console.error(`Error: No secret found for '${name}'`);
+            return false;
+        }
+        
+        delete secrets[name];
+        saveSecrets(secrets, password);
+        
+        console.log(`✓ Secret for '${name}' removed successfully`);
+        return true;
+    } catch (error) {
+        console.error(`Error: ${error.message}`);
+        return false;
+    }
+}
+
+/**
+ * Export all secrets in plaintext
+ */
+async function exportSecrets() {
+    try {
+        const password = await getPassword();
+        
+        console.log('\n⚠️  WARNING: This will display all secrets in plaintext!');
+        const confirmed = await confirm('Type \'yes\' to continue: ');
+        
+        if (!confirmed) {
+            console.log('Export cancelled.');
+            return false;
+        }
+        
+        const secrets = await loadSecrets(password);
+        
+        console.log('\n' + '='.repeat(60));
+        console.log('SECRETS (keep this secure!):');
+        console.log('='.repeat(60));
+        
+        Object.keys(secrets).sort().forEach(name => {
+            console.log(`${name}: ${secrets[name]}`);
+        });
+        
+        console.log('='.repeat(60) + '\n');
+        return true;
+    } catch (error) {
+        console.error(`Error: ${error.message}`);
+        return false;
+    }
+}
+
+/**
+ * Print usage information
+ */
+function printUsage() {
+    console.log(`
+Secure OTP Manager
+
+Usage:
+    otp add <name> <secret>     Add/update OTP secret
+    otp get <name>              Generate OTP code
+    otp list                    List all services
+    otp remove <name>           Remove a secret
+    otp export                  Export all secrets (plaintext)
+
+Examples:
+    otp add github JBSWY3DPEHPK3PXP
+    otp get github
+    otp list
+    `);
+}
+
+/**
+ * Main entry point
+ */
+async function main() {
+    const args = process.argv.slice(2);
+    
+    if (args.length === 0) {
+        printUsage();
+        process.exit(1);
+    }
+    
+    const command = args[0].toLowerCase();
+    
+    try {
+        let success = false;
+        
+        switch (command) {
+            case 'add':
+                if (args.length !== 3) {
+                    console.error('Usage: otp add <name> <secret>');
+                    process.exit(1);
+                }
+                success = await addSecret(args[1], args[2]);
+                break;
+            
+            case 'get':
+                if (args.length !== 2) {
+                    console.error('Usage: otp get <name>');
+                    process.exit(1);
+                }
+                success = await getOTP(args[1]);
+                break;
+            
+            case 'list':
+                success = await listServices();
+                break;
+            
+            case 'remove':
+                if (args.length !== 2) {
+                    console.error('Usage: otp remove <name>');
+                    process.exit(1);
+                }
+                success = await removeSecret(args[1]);
+                break;
+            
+            case 'export':
+                success = await exportSecrets();
+                break;
+            
+            default:
+                console.error(`Error: Unknown command '${command}'`);
+                printUsage();
+                process.exit(1);
+        }
+        
+        process.exit(success ? 0 : 1);
+    } catch (error) {
+        if (error.message === 'Cancelled') {
+            console.log('\n\nOperation cancelled.');
+            process.exit(1);
+        }
+        console.error(`\nError: ${error.message}`);
+        process.exit(1);
+    }
+}
+
+// Run main function
+main();
