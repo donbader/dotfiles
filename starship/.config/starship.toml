@@ -1,0 +1,102 @@
+"$schema" = 'https://starship.rs/config-schema.json'
+
+format = """
+[](color_line_1)\
+$sudo\
+$os\
+$username\
+[](bg:color_line_2 fg:color_line_1)\
+$directory\
+[](fg:color_line_2 bg:color_line_3)\
+$git_branch\
+$git_status\
+[](fg:color_line_3 bg:color_line_4)\
+$memory_usage\
+$jobs\
+[](fg:color_line_4 bg:color_line_5)\
+$docker_context\
+$kubernetes\
+$aws\
+[](fg:color_line_5 bg:color_line_6)\
+$time\
+[ ](fg:color_line_6)\
+$line_break$character"""
+
+palette = 'teal_gradient'
+
+[palettes.teal_gradient]
+color_fg0 = '#ffffff'
+color_fg1 = '#000000'
+color_line_1 = '#212F45'
+color_line_2 = '#1B3A4B'
+color_line_3 = '#144552'
+color_line_4 = '#0B525B'
+color_line_5 = '#006466'
+color_line_6 = '#2A7475'
+color_green = '#98971a'
+color_red = '#cc241d'
+color_purple = '#b16286'
+
+[os]
+disabled = false
+style = "bg:color_line_1 fg:color_fg0"
+
+[os.symbols]
+Windows = "󰍲"
+Ubuntu = "󰕈"
+SUSE = ""
+Raspbian = "󰐿"
+Mint = "󰣭"
+Macos = "󰀵"
+Manjaro = ""
+Linux = "󰌽"
+Gentoo = "󰣨"
+Fedora = "󰣛"
+Alpine = ""
+Amazon = ""
+Android = ""
+Arch = "󰣇"
+Artix = "󰣇"
+CentOS = ""
+Debian = "󰣚"
+Redhat = "󱄛"
+RedHatEnterprise = "󱄛"
+
+[username]
+show_always = true
+style_user = "bg:color_line_1 fg:color_fg0"
+style_root = "bg:color_line_1 fg:color_fg0"
+format = '[ $user ]($style)'
+
+[directory]
+style = "fg:color_fg0 bg:color_line_2"
+format = "[ $path ]($style)"
+truncation_length = 3
+truncation_symbol = "…/"
+
+[git_branch]
+symbol = ""
+style = "bg:color_line_3"
+format = '[[ $symbol $branch ](fg:color_fg0 bg:color_line_3)]($style)'
+
+[git_status]
+style = "bg:color_line_3"
+format = '[[($all_status$ahead_behind )](fg:color_fg0 bg:color_line_3)]($style)'
+
+[time]
+disabled = false
+time_format = "%F %T"
+style = "bg:color_line_6"
+format = '[[  $time ](fg:color_fg0 bg:color_line_6)]($style)'
+
+[line_break]
+disabled = false
+
+[character]
+disabled = false
+success_symbol = '[](bold fg:color_green)'
+error_symbol = '[](bold fg:color_red)'
+vimcmd_symbol = '[](bold fg:color_green)'
+vimcmd_replace_one_symbol = '[](bold fg:color_purple)'
+vimcmd_replace_symbol = '[](bold fg:color_purple)'
+vimcmd_visual_symbol = '[](bold fg:color_line_2)'
