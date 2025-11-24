@@ -117,23 +117,61 @@ echo "=== PR_DIFF ===" && gh pr diff $pr_number
 → Don't suggest webhooks
 ```
 
-### Phase 3: Analyze Code (Parallel Tool Usage)
+### Phase 3: Analyze Code (Parallel with Task Tool)
 
-Perform these analyses **in parallel** using multiple tool calls:
+**Use Task tool for parallel analysis** to maximize efficiency and speed.
 
-1. **Read changed files** (3-5 most critical files only)
-   - Read full file context to understand surrounding code
-   - Focus on changed sections, not entire file
-   
-2. **Search for related code** (only if needed)
-   - Find similar patterns for validation
-   - Look for existing tests
-   - Identify established conventions
-   
-3. **Check documentation** (only if relevant)
-   - Skip for small bug fixes
+Launch multiple Task agents **in parallel** (single message with multiple Task tool calls) to analyze different aspects:
 
-**Important**: Be selective - don't read everything speculatively.
+**Task 1: File Context Analysis**
+```
+Prompt: "Read and analyze these changed files from the PR diff: [list 3-5 most critical files]. 
+For each file:
+- Read full file context to understand surrounding code
+- Focus on the changed sections (lines [X-Y])
+- Identify patterns, architecture decisions, and dependencies
+- Note any established conventions being followed or violated
+Return: Summary of each file's context, patterns found, and any concerns"
+```
+
+**Task 2: Codebase Pattern Search** (only if needed to validate concerns)
+```
+Prompt: "Search the codebase for:
+- Similar patterns to [specific pattern from changed code]
+- Existing tests related to [changed functionality]
+- Established conventions for [specific concern - e.g., 'database queries', 'error handling']
+Examples to find: [be specific about what to search for]
+Return: Examples of how this is done elsewhere in the codebase with file:line references"
+```
+
+**Task 3: Security & Quality Scan**
+```
+Prompt: "Analyze this code diff for:
+- Security issues: SQL injection, XSS, auth bypasses, data exposure
+- Common bugs: null handling, edge cases, logic errors
+- Performance problems: N+1 queries, inefficient algorithms
+Focus only on changed code. Return: List of issues found with severity and line numbers"
+```
+
+**Example parallel Task usage**:
+```markdown
+I'll launch 3 analysis tasks in parallel:
+
+*Launches Task 1, Task 2, Task 3 simultaneously in one message*
+
+[Tasks complete and return results]
+
+Based on the analysis:
+- Task 1 found: [file context summary]
+- Task 2 found: [pattern examples]
+- Task 3 found: [security/quality issues]
+```
+
+**Important**: 
+- Launch all Tasks in **single message** for true parallelism
+- Be specific in Task prompts about what to find
+- Only launch Task 2 (pattern search) if you need to validate a concern
+- Skip Task 3 for trivial changes (typo fixes, documentation only)
 
 ### Phase 4: Identify Issues (Focus on Changed Code Only)
 
@@ -194,13 +232,78 @@ Perform these analyses **in parallel** using multiple tool calls:
 
 ### Phase 6: Post Comments (After Approval)
 
-**Choose implementation**:
+**IMPORTANT**: Use **parallel Task tool** by default if you have **> 3 comments** to post.
 
-**Option 1: Simple (< 10 comments)**
+**Decision tree**:
+- **1-3 comments**: Use simple sequential bash commands
+- **> 3 comments**: Use parallel Task tool (DEFAULT for efficiency)
+
+**Method 1: Sequential (1-3 comments only)**
 ```bash
 gh pr comment <PR_NUMBER> --body "..." --file path/to/file.ts --line 42; \
 gh pr comment <PR_NUMBER> --body "..." --file path/to/file.ts --line 108; \
 gh pr review <PR_NUMBER> --comment --body "$(cat <<'EOF'
+## Overall Review Summary
+[summary content]
+EOF
+)"
+```
+
+**Method 2: Parallel with Task Tool (> 3 comments - DEFAULT)**
+
+Launch parallel Task agents to post comments simultaneously:
+
+```markdown
+I'll post these 7 comments in parallel using Task agents:
+
+*Launch multiple Task agents in parallel (single message):*
+
+Task 1: Post comments 1-3
+Task 2: Post comments 4-6  
+Task 3: Post comment 7 + summary
+
+[After tasks complete]
+
+✅ All comments posted successfully! View PR: [URL]
+```
+
+**Task prompt template**:
+```
+Task: "Post these inline comments to PR #[NUMBER]:
+
+Comment 1:
+- File: auth.ts
+- Line: 42
+- Body: [full comment text with markdown and watermark]
+
+Comment 2:
+- File: middleware.ts
+- Line: 120
+- Body: [full comment text with markdown and watermark]
+
+Use gh pr comment to post each inline comment.
+Return: Confirmation of posted comments with any errors"
+```
+
+**Parallel posting strategy**:
+- Batch comments into groups (2-3 comments per Task)
+- Launch all Tasks in single message
+- One Task should post the summary comment
+- Wait for all to complete before confirming to user
+
+**Example with 7 comments**:
+```markdown
+*Launches 3 Tasks in parallel:*
+
+Task 1: "Post comments 1-3 to PR #123" (auth.ts:42, middleware.ts:120, user-controller.ts:85)
+Task 2: "Post comments 4-6 to PR #123" (auth.ts:200, user-service.ts:55, cache.ts:30)
+Task 3: "Post comment 7 and summary to PR #123" (error-handler.ts:15 + overall summary)
+
+[All Tasks execute simultaneously]
+```
+
+**Summary comment structure**:
+```markdown
 ## Overall Review Summary
 
 **Overall assessment**: [2-3 sentences on code quality vs PR purpose]
@@ -227,41 +330,6 @@ gh pr review <PR_NUMBER> --comment --body "$(cat <<'EOF'
 
 ---
 *🤖 Generated by OpenCode Assistant*
-EOF
-)"
-```
-
-**Option 2: Parallel (10+ comments)**
-```bash
-pr_number=<PR_NUMBER>
-commit_sha=$(gh pr view $pr_number --json headRefOid -q .headRefOid)
-repo=$(gh repo view --json nameWithOwner -q .nameWithOwner)
-token=$(gh auth token)
-
-post_comment() {
-  curl -s -X POST \
-    -H "Authorization: token $token" \
-    -H "Accept: application/vnd.github+json" \
-    "https://api.github.com/repos/$repo/pulls/$pr_number/comments" \
-    -d "$(jq -n \
-      --arg body "$1" \
-      --arg commit "$commit_sha" \
-      --arg path "$2" \
-      --arg line "$3" \
-      '{body: $body, commit_id: $commit, path: $path, line: ($line | tonumber)}'
-    )" > /dev/null &
-}
-
-# Post all in parallel (each includes watermark)
-post_comment "🚨 **Critical**: ...\n\n---\n*🤖 Generated by OpenCode Assistant*" "file.ts" "42"
-post_comment "⚠️ **Important**: ...\n\n---\n*🤖 Generated by OpenCode Assistant*" "file.ts" "108"
-wait
-
-# Post summary
-gh pr review $pr_number --comment --body "$(cat <<'EOF'
-[Summary with Future Considerations section]
-EOF
-)"
 ```
 
 ### Phase 7: Confirmation
