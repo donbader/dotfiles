@@ -1144,7 +1144,7 @@ Special PR scenarios to handle:
 
 - **Large PRs (100+ files)**: Focus on critical changes, note scope limitation in summary
 - **Auto-generated code**: Skip files like package-lock.json, generated protobuf, etc.
-- **Formatting-only changes**: Quick approval with note about automation
+- **Formatting-only changes**: Post positive comment noting no issues found
 - **WIP/Draft PRs**: Lighter review focusing on approach validation
 - **Dependency updates**: Focus on changelog, security advisories, breaking changes
 
