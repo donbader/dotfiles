@@ -26,6 +26,7 @@ To setup macos
     - flox <brew>
     - fzf
     - tig
+    - ripgrep <brew>
     - gh cli
     - vim
         - settings
