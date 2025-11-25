@@ -1,104 +1,161 @@
 ---
 name: git:review-pr
-description: Provide comprehensive, educational code review for a GitHub PR
+description: Provide comprehensive, educational code review for GitHub PRs
 ---
 
 # Review GitHub Pull Request
 
-Perform a thorough, educational code review of a GitHub PR with constructive feedback that helps the author learn and improve their code quality.
+Perform thorough, educational code reviews that help developers learn and improve code quality through constructive feedback.
 
 ## Usage
 
 **Command syntax**:
-```
+```bash
 /git:review-pr [PR_URL]
 ```
 
 **Examples**:
 ```bash
-# Review PR from URL (recommended)
-/git:review-pr https://github.com/payfazz/straitsx-blockchain/pull/2944
+# Review specific PR by URL
+/git:review-pr https://github.com/owner/repo/pull/123
 
 # Review PR for current branch (auto-detect)
 /git:review-pr
 ```
 
-**Priority**: If you provide a PR URL as `$1`, that URL is used regardless of current branch. Otherwise, auto-detects PR for current branch.
+**Priority**: Explicit PR URL takes precedence over auto-detection.
+
+## Complete Workflow Example
+
+**Reviewing PR from URL** (uses worktree):
+1. User provides PR URL → Create worktree for that PR's branch
+2. Fetch PR information in worktree context
+3. Analyze code and generate review comments
+4. Present to user for approval
+5. Post review to GitHub
+6. Clean up worktree → User's original work unchanged
+
+**Reviewing current branch** (no worktree):
+1. Auto-detect PR from current branch
+2. Fetch PR information
+3. Analyze code and generate review comments
+4. Present to user for approval  
+5. Post review to GitHub
 
 ## Review Philosophy
 
-Your review should be:
-- **Educational**: Explain WHY something should change, not just WHAT
+Effective code reviews should be:
+- **Educational**: Explain WHY changes are needed, not just WHAT
 - **Constructive**: Offer solutions and alternatives, not just criticism
-- **Specific**: Reference exact line numbers, files, and code patterns
-- **Balanced**: Highlight what's done well AND what needs improvement
-- **Actionable**: Provide clear next steps the author can take
-- **Focused**: Only comment on code within the PR scope
-- **Context-aware**: Understand the PR description to know the author's intent
+- **Specific**: Reference exact files, line numbers, and code patterns
+- **Balanced**: Acknowledge strengths AND identify improvements
+- **Actionable**: Provide clear, implementable next steps
+- **Focused**: Comment only on code within PR scope
+- **Context-aware**: Understand PR intent from description
 
-**Goal**: The PR author should feel they learned something valuable from your review.
+**Goal**: Every review should be a learning opportunity that improves developer skills.
 
 ## Core Principles
 
 ### 1. Stay Within Scope
 
 **Inline Comments** - Only for code changes in this PR:
-- Security issues, bugs, breaking changes
-- Performance problems in new code
+- Security vulnerabilities, bugs, breaking changes
+- Performance problems in modified code
 - Architecture violations in changed code
 - Missing tests for new functionality
 - Readability issues in changed code
 
-**Summary "Future Considerations"** - For broader suggestions:
+**Summary Section** - For broader suggestions:
 - Refactoring opportunities outside PR scope
-- Architecture improvements for future work
+- Future architecture improvements
 - Technical debt to track separately
-- Clearly marked as NOT blockers
+- Clearly marked as non-blockers
 
-**Example**:
+**Examples**:
 ```
-❌ BAD: "This entire UserService should use dependency injection"
-   (UserService not changed - creates scope creep)
+❌ BAD: "UserService should use dependency injection"
+   (UserService not modified - creates scope creep)
 
-✅ GOOD: "The new getUserProfile() queries DB directly. Use the existing 
+✅ GOOD: "getUserProfile() queries DB directly. Use existing 
    UserRepository pattern (see getUserById:42) for consistency"
    (getUserProfile() is new - directly relevant)
 
-✅ SUMMARY: "Future: UserService could benefit from dependency injection 
-   to improve testability (not a blocker for this OAuth PR)"
+✅ SUMMARY: "Future: UserService could benefit from dependency 
+   injection for testability (not blocking this OAuth PR)"
 ```
 
-### 2. Read PR Description for Context
+### 2. Understand PR Context
 
-Always analyze the PR description to understand:
-- **What**: Author's stated goal
-- **Why**: Motivation for changes
-- **Scope**: Hotfix, feature, refactor, or bug fix
+Always read the PR description to understand:
+- **What**: Author's stated goal and changes
+- **Why**: Motivation and problem being solved
+- **Scope**: Feature, bug fix, hotfix, or refactor
 - **Constraints**: Known trade-offs or limitations
 - **Testing**: Author's testing approach
 
 This prevents commenting on intentional decisions or asking already-answered questions.
 
-## Workflow (6 Phases)
+**Context-aware review examples**:
+```
+"Quick hotfix for production bug - will refactor in JIRA-123"
+→ Focus on correctness over perfect architecture
 
-### Phase 1: Fetch PR Information
+"Part 1 of 3: Data layer only, UI in next PR"  
+→ Don't comment on missing UI
 
-**Single bash command** to fetch everything:
+"Using polling due to firewall restrictions"
+→ Don't suggest webhooks as alternative
+```
+
+## Workflow
+
+### Phase 1: Setup Worktree (if needed)
+
+**IMPORTANT**: When reviewing a PR from a URL (not current branch), use git worktree to avoid disrupting user's work.
 
 ```bash
-# Extract PR number from URL ($1) or current branch
+# Determine if we need a worktree
 if [ -n "$1" ]; then
+  # PR URL provided - extract PR number
   pr_number=$(echo "$1" | grep -oE '[0-9]+$')
-  echo "=== INFO: Using PR from provided URL ==="
+  use_worktree=true
+  echo "=== Using PR from URL - will create worktree ==="
 else
+  # Use current branch
   pr_number=$(gh pr view --json number -q .number 2>/dev/null)
+  use_worktree=false
 fi
 
 if [ -z "$pr_number" ]; then 
-  echo "ERROR: No PR found. Provide a PR URL or ensure current branch has a PR."
+  echo "ERROR: No PR found. Provide URL or ensure current branch has a PR."
   exit 1
 fi
 
+# Setup worktree if needed
+if [ "$use_worktree" = true ]; then
+  # Get PR branch name
+  pr_branch=$(gh pr view $pr_number --json headRefName -q .headRefName)
+  
+  # Create unique worktree directory
+  worktree_dir="/tmp/pr-review-${pr_number}-$$"
+  
+  # Fetch PR branch and create worktree
+  git fetch origin "$pr_branch:$pr_branch" 2>/dev/null || git fetch origin "$pr_branch"
+  git worktree add "$worktree_dir" "$pr_branch"
+  
+  # Change to worktree directory
+  cd "$worktree_dir"
+  
+  echo "=== Created worktree at $worktree_dir ==="
+fi
+```
+
+### Phase 2: Fetch PR Information
+
+**Single bash command** to fetch all required data:
+
+```bash
 echo "=== PR_NUMBER ===" && echo "$pr_number" && \
 echo "=== PR_METADATA ===" && gh pr view $pr_number --json title,body,author,url && \
 echo "=== FILES_CHANGED ===" && gh pr view $pr_number --json files -q '.files[] | "\(.path) (+\(.additions)/-\(.deletions))"' && \
@@ -106,96 +163,79 @@ echo "=== PR_DIFF ===" && gh pr diff $pr_number
 ```
 
 **Key points**:
-- PR URL from `$1` takes priority over current branch
+- Worktree created if reviewing PR from URL
 - Single chained command for efficiency
-- Capture PR description (critical for context)
+- Captures PR description for context
 
-### Phase 2: Understand PR Context
+### Phase 3: Analyze PR Context
 
-**Before analyzing code**, read the PR description to extract:
+**Before reviewing code**, extract context from PR description:
 1. **Purpose**: What is the author trying to achieve?
 2. **Scope**: Bug fix, feature, refactor, hotfix?
-3. **Constraints**: Trade-offs or technical debt mentioned?
-4. **Testing**: What testing approach did they take?
+3. **Constraints**: Any trade-offs or technical debt mentioned?
+4. **Testing**: What testing approach was taken?
 
-**Example contexts**:
-```
-"Quick hotfix for production bug - will refactor in JIRA-123"
-→ Focus on correctness, not perfect architecture
+### Phase 4: Analyze Code
 
-"Part 1 of 3: Adds data layer only, UI in next PR"  
-→ Don't comment on missing UI
+**IMPORTANT**: Analyze code directly. Do NOT use Task tool unless searching patterns across many files.
 
-"Using polling due to firewall restrictions"
-→ Don't suggest webhooks
-```
+**Analysis steps**:
+1. Read the PR diff to identify changed files and line ranges
+2. Read 3-5 most important changed files for full context
+3. Analyze changes for issues (see priority categories below)
 
-### Phase 3: Analyze Code
+**Priority categories for review**:
 
-**IMPORTANT**: Analyze code directly yourself. Do NOT use Task tool unless searching patterns across many files.
+**1. Security & Bugs** 🚨 (Always comment if found)
+- Security vulnerabilities (SQL injection, XSS, auth bypasses)
+- Logic errors, null/undefined handling issues
+- Race conditions, deadlocks, resource leaks
+- Breaking changes to public APIs
 
-**Steps**:
-1. **Read the PR diff** to identify changed files and line ranges
-2. **Read 3-5 most important changed files** for full context
-3. **Analyze changes** for issues (see categories below)
+**2. Performance** ⚠️ (Significant impact only)
+- N+1 query problems
+- Inefficient algorithms (O(n²) when O(n) exists)
+- Memory leaks, unnecessary allocations
 
-**Analysis categories** (priority order):
+**3. Architecture & Design** ⚠️ (Established pattern violations)
+- Violations of project patterns
+- Separation of concerns issues
+- Inconsistent error handling
 
-1. **Security & Bugs** 🚨
-   - Security vulnerabilities (SQL injection, XSS, auth bypasses)
-   - Logic errors, null handling issues
-   - Race conditions, deadlocks, resource leaks
-   - Breaking changes to public APIs
+**4. Testing** 💡 (New functionality without tests)
+- Missing tests for new features
+- Insufficient edge case coverage
 
-2. **Performance** ⚠️
-   - N+1 query problems
-   - Inefficient algorithms (O(n²) when O(n) exists)
-   - Memory leaks, unnecessary allocations
-
-3. **Architecture & Design** ⚠️
-   - Violations of established patterns
-   - Separation of concerns issues
-   - Inconsistent error handling
-
-4. **Testing** 💡
-   - New functionality without tests
-   - Missing edge case coverage
-
-5. **Readability** 💡
-   - Confusing variable names or logic
-   - Missing documentation for public APIs
-
-**Why direct analysis is better**:
-- ✅ Faster (no Task overhead)
-- ✅ Better context (you have the diff)
-- ❌ Task agents add latency
+**5. Readability** 💡 (Truly confusing code only)
+- Confusing variable names or logic
+- Missing documentation for public APIs
 
 **When to use Task tool** (rarely):
-Only if you need to search patterns across many files to validate a concern.
+Only when you need to search patterns across many files to validate a concern.
 
-Example: "Search for error handling patterns in src/controllers/*.ts to verify consistency"
+Example: "Search error handling patterns in src/controllers/*.ts to verify consistency"
 
-### Phase 4: Identify Issues
+### Phase 5: Identify Issues
 
 **Aim for 3-10 meaningful comments**, not 50+ nitpicks.
 
-**Apply scope filters**:
-- Is this in the diff?
+**Scope filters** (ask yourself):
+- Is this code in the diff?
 - Within PR's stated purpose?
-- Already addressed in description?
-- Pre-existing issue unrelated to changes?
+- Already addressed in PR description?
+- Pre-existing issue unrelated to these changes?
 
-**Guidelines**:
-- **Security & Bugs**: Always comment if found
-- **Performance**: Only if significant impact (quantify)
-- **Architecture**: Only if violates established patterns
-- **Testing**: If new functionality lacks tests
-- **Readability**: Only truly confusing code
-- **Future Improvements**: Save for summary's "Future Considerations"
+**Comment guidelines by category**:
+- **Security & Bugs** 🚨: Always comment
+- **Performance** ⚠️: Only if significant impact (quantify when possible)
+- **Architecture** ⚠️: Only if violates established patterns
+- **Testing** 💡: If new functionality lacks tests
+- **Readability** 💡: Only truly confusing code
+- **Future Improvements**: Save for summary section
 
-### Phase 5: Present for Approval
+### Phase 6: Present for User Approval
 
-**CRITICAL**: Present to user for approval BEFORE posting.
+**CRITICAL**: Present review to user for approval BEFORE posting.
 
 **Display format**:
 ```
@@ -209,43 +249,38 @@ Example: "Search for error handling patterns in src/controllers/*.ts to verify c
 **Comments to post**:
 
 1. 🚨 auth.ts:42 - SQL injection vulnerability in login query
-2. ⚠️ user-controller.ts:85 - N+1 query problem when fetching user posts
-3. 💡 user-service.ts:55 - Variable name `d` should be `userProfiles`
+2. ⚠️ user-controller.ts:85 - N+1 query problem fetching user posts
+3. 💡 user-service.ts:55 - Variable `d` should be `userProfiles`
 
 **Post these comments to the PR?** (y/n)
 ```
 
-**Wait for user response** before Phase 6.
+**Wait for user confirmation** before proceeding to Phase 7.
 
-### Phase 6: Post Comments
+### Phase 7: Post Review
 
 **CRITICAL RULES**:
 - ✅ Post ALL comments + summary in ONE review via GitHub API
 - ✅ Every review MUST include at least one inline comment
-- ❌ NEVER post summary-only reviews (they can't be deleted via API)
+- ❌ NEVER post summary-only reviews (cannot be deleted via API)
 - ❌ NEVER use `gh pr review --comment` separately
 
-**Correct approach** (write JSON to temp file):
+**Correct approach** (JSON to temp file):
 
 ```bash
-# Get repo info
+# Get repository info
 repo_info=$(gh repo view --json owner,name -q '.owner.login + "/" + .name')
 
 # Create review JSON with ALL comments + summary
 cat > /tmp/review.json <<'EOF'
 {
   "event": "COMMENT",
-  "body": "## Overall Review Summary\n\n**Overall assessment**: [2-3 sentences]\n\n**Strengths**:\n- [Specific praise]\n\n**Review provided**: I've left inline comments covering:\n- 🚨 [X] Critical issues\n- ⚠️ [X] Important improvements\n- 💡 [X] Suggestions\n\n**Future Considerations** (not blockers):\n- [Out-of-scope suggestions]\n\n---\n*🤖 Generated by OpenCode Assistant*",
+  "body": "## Overall Review\n\n**Assessment**: [2-3 sentences]\n\n**Strengths**:\n- [Specific praise]\n\n**Review breakdown**:\n- 🚨 [X] Critical issues\n- ⚠️ [X] Important improvements\n- 💡 [X] Suggestions\n\n**Future Considerations** (non-blockers):\n- [Out-of-scope suggestions]\n\n---\n*🤖 Generated by OpenCode*",
   "comments": [
     {
       "path": "src/auth.ts",
       "line": 42,
-      "body": "🚨 **Critical - Security Issue**\n\n**Issue**: SQL injection vulnerability\n\n**Fix**:\n```suggestion\nconst query = 'SELECT * FROM users WHERE id = ?';\nconst result = await db.query(query, [userId]);\n```\n\n**Learning**: Always use parameterized queries\n\n---\n*🤖 Generated by OpenCode Assistant*"
-    },
-    {
-      "path": "src/user-controller.ts",
-      "line": 85,
-      "body": "⚠️ **Important - Performance**\n\n**Issue**: N+1 query problem\n\n**Fix**:\n```suggestion\nconst postIds = posts.map(p => p.id);\nconst allComments = await db.query(\n  'SELECT * FROM comments WHERE post_id IN (?)',\n  [postIds]\n);\n```\n\n**Impact**: 101 queries → 2 queries (50x faster)\n\n---\n*🤖 Generated by OpenCode Assistant*"
+      "body": "🚨 **Critical - Security**\n\n**Issue**: SQL injection vulnerability\n\n**Fix**:\n```suggestion\nconst query = 'SELECT * FROM users WHERE id = ?';\nconst result = await db.query(query, [userId]);\n```\n\n**Learning**: Always use parameterized queries to prevent SQL injection\n\n---\n*🤖 Generated by OpenCode*"
     }
   ]
 }
@@ -260,21 +295,35 @@ gh api "repos/${repo_info}/pulls/${pr_number}/reviews" \
 rm /tmp/review.json
 ```
 
-**Suggestion block syntax**:
-- ✅ CORRECT: `\`\`\`suggestion` (no language)
-- ❌ WRONG: `\`\`\`go` or `\`\`\`typescript` (won't show "Apply" button)
+**Key notes**:
+- Suggestion blocks: Use `\`\`\`suggestion` (no language specifier for "Apply" button)
+- Large reviews (>10 comments): Split into batches, full summary in LAST batch only
+- Every comment MUST end with: `---\n*🤖 Generated by OpenCode*`
 
-**For large reviews (> 10 comments)**:
-Split into batches, but put full summary in LAST batch:
+### Phase 8: Cleanup Worktree
+
+**CRITICAL**: If a worktree was created, clean it up after posting review.
+
 ```bash
-# Batch 1: Comments 1-10
-{"event": "COMMENT", "body": "Review batch 1/2", "comments": [...]}
-
-# Batch 2: Comments 11-20 + full summary
-{"event": "COMMENT", "body": "## Overall Review Summary...", "comments": [...]}
+if [ "$use_worktree" = true ]; then
+  # Return to original directory
+  cd - > /dev/null
+  
+  # Remove worktree
+  git worktree remove "$worktree_dir" --force
+  
+  echo "=== Cleaned up worktree ==="
+fi
 ```
 
-### Phase 7: Confirmation
+**Key points**:
+- Always clean up worktrees to avoid leaving orphaned directories
+- Use `--force` to handle any uncommitted changes in worktree
+- Return to original directory before removal
+
+### Phase 9: Confirm Success
+
+Display confirmation message:
 
 ```
 ✅ Review posted successfully!
@@ -282,17 +331,17 @@ Split into batches, but put full summary in LAST batch:
 Posted [X] inline comments to PR #[NUMBER]:
 - 🚨 [X] Critical | ⚠️ [X] Important | 💡 [X] Suggestions
 
-View: [URL]
+View: [PR_URL]
 ```
 
 ## Comment Templates
 
-**Every comment MUST end with**: `---\n*🤖 Generated by OpenCode Assistant*`
+**Required footer**: Every comment MUST end with `---\n*🤖 Generated by OpenCode*`
 
-### Critical Security
+### Security Issue (Critical)
 
 ```markdown
-🚨 **Critical - Security Issue**
+🚨 **Critical - Security**
 
 **Issue**: [e.g., SQL injection vulnerability]
 
@@ -300,31 +349,31 @@ View: [URL]
 
 **Fix**:
 \`\`\`suggestion
-// Secure version
+// Secure implementation
 const query = 'SELECT * FROM users WHERE id = ?';
 const result = await db.query(query, [userId]);
 \`\`\`
 
-**Learning**: [Security principle]
+**Learning**: [Security principle or best practice]
 
-**References**: [OWASP link, codebase example if available]
+**References**: [OWASP link or codebase example if relevant]
 
 ---
-*🤖 Generated by OpenCode Assistant*
+*🤖 Generated by OpenCode*
 ```
 
-### Performance Issue
+### Performance Issue (Important)
 
 ```markdown
-⚠️ **Important - Performance Issue**
+⚠️ **Important - Performance**
 
-**Issue**: [e.g., N+1 query problem - creates 101 DB calls for 100 posts]
+**Issue**: [e.g., N+1 query - creates 101 DB calls for 100 posts]
 
-**Why this matters**: [Explain performance impact with numbers]
+**Why this matters**: [Performance impact with numbers]
 
 **Fix**:
 \`\`\`suggestion
-// Batch fetch all comments in one query
+// Batch fetch in one query
 const postIds = posts.map(p => p.id);
 const allComments = await db.query(
   'SELECT * FROM comments WHERE post_id IN (?)',
@@ -337,15 +386,15 @@ const allComments = await db.query(
 **Learning**: [Performance principle]
 
 ---
-*🤖 Generated by OpenCode Assistant*
+*🤖 Generated by OpenCode*
 ```
 
-### Architecture/Design
+### Architecture/Design (Important)
 
 ```markdown
 ⚠️ **Important - Architecture**
 
-**Issue**: [e.g., Business logic in controller]
+**Issue**: [e.g., Business logic in controller layer]
 
 **Why this matters**: [Maintainability/testability impact]
 
@@ -367,10 +416,10 @@ export class UserController {
 **Learning**: [Design principle]
 
 ---
-*🤖 Generated by OpenCode Assistant*
+*🤖 Generated by OpenCode*
 ```
 
-### Readability
+### Readability (Suggestion)
 
 ```markdown
 💡 **Suggestion - Readability**
@@ -387,7 +436,7 @@ const activeUserProfiles = data
 **Principle**: Code is read 10x more than written - optimize for clarity
 
 ---
-*🤖 Generated by OpenCode Assistant*
+*🤖 Generated by OpenCode*
 ```
 
 ### Question/Discussion
@@ -408,13 +457,13 @@ I noticed [observation]. Was this because [potential reason]?
 Would love to understand your reasoning!
 
 ---
-*🤖 Generated by OpenCode Assistant*
+*🤖 Generated by OpenCode*
 ```
 
 ### Praise
 
 ```markdown
-✅ **Great Implementation!**
+✅ **Great Implementation**
 
 [Specific praise about what's done well]
 
@@ -422,67 +471,67 @@ Would love to understand your reasoning!
 [the good code]
 \`\`\`
 
-[Why this is good - principle followed, problem solved elegantly] 🎯
+[Why this is good - principle followed, problem solved elegantly]
 
 ---
-*🤖 Generated by OpenCode Assistant*
+*🤖 Generated by OpenCode*
 ```
 
-## Review Guidelines
+## Review Best Practices
 
-### What Makes Great Educational Comments
+### Writing Educational Comments
 
-1. **Explain "Why"**: Don't just say "change this"
-   - Bad: "This variable name is wrong"
-   - Good: "Rename `data` to `userProfiles` - specific names make code self-documenting"
+**1. Explain "Why"** - Don't just say what to change
+- ❌ Bad: "This variable name is wrong"
+- ✅ Good: "Rename `data` to `userProfiles` - specific names make code self-documenting"
 
-2. **Provide Context**: Reference standards/patterns
-   - "Violates SRP because function both fetches AND formats data"
-   - "Codebase follows Repository pattern (see user-repository.ts:10)"
+**2. Provide Context** - Reference standards/patterns
+- "Violates SRP - function both fetches AND formats data"
+- "Project follows Repository pattern (see user-repository.ts:10)"
 
-3. **Offer Solutions**: Include code examples
-   - Show the better approach
-   - Explain trade-offs
-   - Make it copy-pasteable
+**3. Offer Solutions** - Include code examples
+- Show the better approach
+- Explain trade-offs
+- Make it copy-pasteable
 
-4. **Be Specific**: Comment on exact lines
-   - Quote exact problematic code
-   - Show exact improved code
+**4. Be Specific** - Comment on exact lines
+- Quote problematic code
+- Show exact improved version
 
-5. **Balance with Praise**: 
-   - Leave positive comments on good code
-   - Use emojis: ✅ 🎯 for praise, 🚨 ⚠️ 💡 for issues
+**5. Balance with Praise**
+- Leave positive comments on well-written code
+- Use emojis: ✅ for praise, 🚨 ⚠️ 💡 for issues
 
-6. **Ask Questions**: Frame as curiosity
-   - "Why X instead of Y - to avoid Z?"
-   - Assume good reasons exist
+**6. Ask Questions** - Frame as curiosity
+- "Why X instead of Y - to avoid Z?"
+- Assume good reasons exist
 
-### Tone
+### Tone Guidelines
 
 - **Collaborative**: "We could..." not "You did this wrong"
 - **Curious**: "Why this approach?" not "This is wrong"
-- **Teaching**: "Here's why..." not "Use this"
+- **Teaching**: "Here's why..." not "Just use this"
 - **Respectful**: Assume good intentions
 - **Empathetic**: Everyone is learning
 
-## Common Mistakes to Avoid
+## Critical: Avoid Common Mistakes
 
-### ❌ CRITICAL: Don't Post Summary-Only Reviews
+### Never Post Summary-Only Reviews
 
-**Problem**: Summary-only reviews (without inline comments) CANNOT be deleted via API.
+**Problem**: Summary-only reviews (without inline comments) cannot be deleted via GitHub API.
 
-**Wrong**:
+**Wrong approach**:
 ```bash
 # DON'T DO THIS - creates non-deletable review
-gh pr review ${pr_number} --comment --body "## Overall Review Summary..."
+gh pr review ${pr_number} --comment --body "## Review Summary..."
 ```
 
-**Correct**:
+**Correct approach**:
 ```bash
 # Post everything in ONE review with inline comments
 {
   "event": "COMMENT",
-  "body": "## Overall Review Summary...",
+  "body": "## Overall Review...",
   "comments": [
     {"path": "file.go", "line": 42, "body": "Comment 1..."},
     {"path": "file.go", "line": 108, "body": "Comment 2..."}
@@ -494,32 +543,43 @@ gh pr review ${pr_number} --comment --body "## Overall Review Summary..."
 
 ## Error Handling
 
+Common error scenarios and responses:
+
 - **No PR found**: Ask user for PR URL
-- **Invalid URL**: Show expected format
-- **Closed/merged**: Ask if they want to review anyway
+- **Invalid URL format**: Show expected format example
+- **PR closed/merged**: Ask if they want to review anyway
 - **Insufficient permissions**: Suggest `gh auth login`
-- **Empty diff**: Inform no changes to review
+- **Empty diff**: Inform that there are no changes to review
+- **API rate limit**: Wait and retry with exponential backoff
+- **Worktree creation fails**: 
+  - Check if branch exists and fetch if needed
+  - Ensure `/tmp` directory is writable
+  - Clean up any existing worktree at that path
+- **Worktree cleanup fails**: Force remove and warn user about manual cleanup if needed
 
 ## Edge Cases
 
-- **Very large PRs (100+ files)**: Focus on critical changes, note limitation
-- **Auto-generated code**: Skip (package-lock.json, etc.)
-- **Formatting-only**: Quick approval with automation note
-- **WIP/Draft**: Lighter review, validate approach
-- **Dependency updates**: Focus on changelog, security, breaking changes
+Special PR scenarios to handle:
+
+- **Large PRs (100+ files)**: Focus on critical changes, note scope limitation in summary
+- **Auto-generated code**: Skip files like package-lock.json, generated protobuf, etc.
+- **Formatting-only changes**: Quick approval with note about automation
+- **WIP/Draft PRs**: Lighter review focusing on approach validation
+- **Dependency updates**: Focus on changelog, security advisories, breaking changes
 
 ## Success Criteria
 
-A successful review:
-- ✅ Presents to user for approval BEFORE posting
-- ✅ Includes OpenCode watermark on every comment
-- ✅ Posts as inline comments on specific lines
-- ✅ Provides educational explanations
-- ✅ Offers concrete code examples
-- ✅ Balances criticism with praise
-- ✅ Is actionable - clear next steps
-- ✅ Feels like learning from a senior dev
+A successful review meets these requirements:
+
+- ✅ Presents review to user for approval BEFORE posting
+- ✅ Includes OpenCode watermark on every comment and summary
+- ✅ Posts as inline comments on specific lines with context
+- ✅ Provides educational explanations with "why" not just "what"
+- ✅ Offers concrete, actionable code examples
+- ✅ Balances constructive criticism with genuine praise
+- ✅ Gives clear, implementable next steps
+- ✅ Feels like learning from an experienced developer
 
 ---
 
-**Remember**: Your goal is to make the author a better developer, not just improve this one PR. Every review is a teaching opportunity.
+**Remember**: Every review is a teaching opportunity. The goal is to help developers grow their skills, not just improve one PR.
