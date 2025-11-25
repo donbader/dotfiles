@@ -4,7 +4,7 @@ set -euo pipefail
 
 # Paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OTP_SCRIPT="${SCRIPT_DIR}/otp"
+OTP_SCRIPT="$(command -v otp || echo "${SCRIPT_DIR}/otp")"
 PRITUNL_CLIENT="/Applications/Pritunl.app/Contents/Resources/pritunl-client"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/vpn-connect"
 LAST_PROFILE_FILE="${CACHE_DIR}/last_profile"

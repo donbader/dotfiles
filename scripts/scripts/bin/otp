@@ -42,8 +42,8 @@ const readline = require('readline');
 const { execSync } = require('child_process');
 
 // Configuration
-const SCRIPT_DIR = __dirname;
-const ENCRYPTED_FILE = path.join(SCRIPT_DIR, 'otp_secrets.enc');
+const SCRIPT_DIR = path.join(__dirname, '..');
+const ENCRYPTED_FILE = path.join(SCRIPT_DIR, 'data', 'otp_secrets.enc');
 const KDF_ITERATIONS = 600000; // OWASP recommended minimum for PBKDF2
 const KEYCHAIN_SERVICE = 'otp-manager';
 const KEYCHAIN_ACCOUNT = 'master-password-cache';
