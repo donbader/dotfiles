@@ -36,6 +36,8 @@ Your approach to addressing review comments should be:
 
 **When PR URL is provided**: Create a git worktree to avoid disrupting user's current work.
 
+**CRITICAL**: Always create worktree from `origin/$branch` to ensure latest remote state.
+
 ```bash
 # Extract PR number from URL or current branch
 if [ -n "$1" ]; then
@@ -48,7 +50,10 @@ fi
 
 # Create worktree if needed
 if [ "$use_worktree" = true ]; then
-  pr_branch=$(gh pr view $pr_number --json headRefName -q .headRefName)
+  # Get PR metadata including base branch
+  pr_info=$(gh pr view $pr_number --json headRefName,baseRefName)
+  pr_branch=$(echo "$pr_info" | jq -r .headRefName)
+  base_branch=$(echo "$pr_info" | jq -r .baseRefName)
   
   # Get git repository root and create worktree directory
   repo_root=$(git rev-parse --show-toplevel)
@@ -57,9 +62,31 @@ if [ "$use_worktree" = true ]; then
   # Create .worktree directory if it doesn't exist
   mkdir -p "${repo_root}/.worktree"
   
-  git fetch origin "$pr_branch:$pr_branch" 2>/dev/null || git fetch origin "$pr_branch"
-  git worktree add "$worktree_dir" "$pr_branch"
+  # CRITICAL: Fetch latest from remote to avoid stale state
+  echo "=== Fetching latest changes from origin/$pr_branch ==="
+  git fetch origin "$pr_branch"
+  
+  # Create worktree from remote branch reference (not local)
+  git worktree add "$worktree_dir" "origin/$pr_branch"
+  
+  # Change to worktree directory
   cd "$worktree_dir"
+  
+  # Verify we're on the latest commit
+  latest_commit=$(git log -1 --oneline)
+  echo "=== Created worktree at $worktree_dir ==="
+  echo "=== Current commit: $latest_commit ==="
+  echo "=== Base branch: $base_branch ==="
+  
+  # Sanity check: verify no newer commits on remote
+  git fetch origin "$pr_branch" 2>/dev/null
+  newer_commits=$(git log HEAD..origin/$pr_branch --oneline)
+  if [ -n "$newer_commits" ]; then
+    echo "⚠️  WARNING: Remote has newer commits than worktree!"
+    echo "$newer_commits"
+    echo "=== Resetting to latest remote commit ==="
+    git reset --hard "origin/$pr_branch"
+  fi
 fi
 ```
 
@@ -68,9 +95,12 @@ fi
 Gather all necessary information in a single command:
 
 ```bash
+# Get repository info for API calls
+repo_info=$(gh repo view --json owner,name -q '.owner.login + "/" + .name')
+
 echo "=== PR_NUMBER ===" && echo "$pr_number" && \
 echo "=== PR_METADATA ===" && gh pr view $pr_number --json title,body,author,url,headRefName && \
-echo "=== REVIEW_COMMENTS ===" && gh api "repos/{owner}/{repo}/pulls/${pr_number}/comments" --jq '.[] | select(.in_reply_to_id == null) | {id, path, line, body, user: .user.login, created_at, pull_request_review_id}' && \
+echo "=== REVIEW_COMMENTS ===" && gh api "repos/${repo_info}/pulls/${pr_number}/comments" --jq '[.[] | select(.in_reply_to_id == null) | {id, path, line, body, user: .user.login, created_at, pull_request_review_id}]' && \
 echo "=== REVIEW_THREADS ===" && gh pr view $pr_number --json comments --jq '.comments[] | {id, body, author: .author.login, created_at}' && \
 echo "=== COMMIT_HISTORY ===" && git log --oneline origin/main..HEAD
 ```
@@ -85,13 +115,40 @@ echo "=== COMMIT_HISTORY ===" && git log --oneline origin/main..HEAD
 
 **Smart filtering and organization**:
 
-1. **Auto-detect already addressed issues**:
+1. **Filter out resolved comments**:
+   - GitHub API returns thread resolution status in the review threads
+   - Skip any comments that are already marked as resolved
+   - Focus only on unresolved threads that need attention
+   - Check for resolved threads using GraphQL if needed:
+   ```bash
+   # Get resolved status for all review threads
+   gh api graphql -f query='
+     query($owner: String!, $repo: String!, $pr: Int!) {
+       repository(owner: $owner, name: $repo) {
+         pullRequest(number: $pr) {
+           reviewThreads(first: 100) {
+             nodes {
+               isResolved
+               comments(first: 1) {
+                 nodes {
+                   databaseId
+                   body
+                 }
+               }
+             }
+           }
+         }
+       }
+     }' -f owner="$owner" -f repo="$repo" -F pr=$pr_number
+   ```
+
+2. **Auto-detect already addressed issues** (for unresolved comments):
    - Check if files mentioned in comments were modified in recent commits
    - Look for relevant keywords in commit messages
    - Read current file state and compare with comment context
    - Flag as "Possibly Already Addressed" if detected
 
-2. **Categorize by priority**:
+3. **Categorize by priority** (only unresolved comments):
    - 🚨 **Critical**: Security, bugs, breaking changes (MUST address)
    - ⚠️ **Important**: Performance, architecture violations (SHOULD address)
    - 💡 **Suggestions**: Readability, best practices (NICE to address)
@@ -99,12 +156,12 @@ echo "=== COMMIT_HISTORY ===" && git log --oneline origin/main..HEAD
    - ✅ **Praise**: Positive feedback (ACKNOWLEDGE)
    - 🔍 **Possibly Addressed**: Already fixed in recent commits (VERIFY)
 
-3. **Present organized summary**:
+4. **Present organized summary**:
 
 ```
 ## Review Comments for PR #123: Add user authentication
 
-Found 6 unresolved comment threads:
+Found 6 unresolved comment threads (4 already resolved, skipped):
 
 ### Critical Issues (require action)
 1. 🚨 src/auth.ts:42 - SQL injection vulnerability
@@ -421,6 +478,11 @@ Provide a comprehensive completion report:
 ```
 ✅ Review Comments Addressed
 
+**Comments processed**:
+- 🔍 Found: 11 total review comments
+- ✅ Already resolved: 4 comments (skipped)
+- 📝 Processed: 7 unresolved comments
+
 **Actions taken**:
 - ✅ Implemented: 3 comments
 - 🔍 Already addressed: 1 comment
@@ -428,24 +490,21 @@ Provide a comprehensive completion report:
 - 🙏 Acknowledged: 1 comment
 - ❌ Rejected (out of scope): 1 comment
 - 💭 Rejected (disagreed): 0 comments
-- ⏭️ Skipped: 1 comment
+- ⏭️ Skipped: 0 comments
 
 **Commits created**: 3
 - abc123f: fix: address SQL injection vulnerability in auth (+ tests)
 - def456g: refactor: implement batch query for user posts
 - ghi789h: refactor: improve variable naming in utils
 
-**Response posted**: Comprehensive comment with table addressing all 7 threads
+**Response posted**: Comprehensive comment with table addressing all 7 unresolved threads
 (Posted as PR comment due to GitHub API limitations with inline replies)
 
-**Still needs attention** ⚠️:
-- 🚨 src/selector.ts:50 - Potential panic from RandomInt (CRITICAL)
-
 **Next steps**:
-- 1 critical comment still needs attention (see above)
+- All unresolved comments have been addressed
 - All changes have been pushed to remote
 - Reviewers will be notified of your comprehensive response
-- Address remaining comments before requesting re-review
+- Consider requesting re-review from reviewers
 
 View PR: [PR_URL]
 ```
@@ -496,8 +555,9 @@ Before applying changes:
 
 Handle common scenarios gracefully:
 - **No PR found**: Ask user for PR URL
-- **No unresolved comments**: Inform user all are addressed
-- **Comment line missing**: Show current file state
+- **No unresolved comments**: Inform user all comments are resolved or addressed
+- **All comments resolved**: Display count and congratulate, no action needed
+- **Comment line missing**: Show current file state and note code may have changed
 - **Push fails**: Check for conflicts, suggest pulling
 - **Permission errors**: Check `gh auth` scopes
 - **Worktree fails**: Clean up and retry
@@ -505,6 +565,8 @@ Handle common scenarios gracefully:
 - **Inline reply API fails**: Fall back to comprehensive PR comment approach (see Phase 7)
 - **JSON parsing errors with --input**: Use `-F field=@file` or `-f field=value` instead
 - **Multi-line body escaping issues**: Write to temp file and use `--body-file` or `-F body=@file`
+- **GraphQL query for resolved threads fails**: Fall back to processing all comments, rely on "already addressed" detection
+- **Worktree state stale**: Detect and reset to latest remote commit (see Phase 1)
 
 ## Communication Best Practices
 
