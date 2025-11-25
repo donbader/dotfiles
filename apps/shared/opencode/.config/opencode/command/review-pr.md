@@ -21,9 +21,25 @@ Perform thorough, educational code reviews that help developers learn and improv
 
 # Review PR for current branch (auto-detect)
 /git:review-pr
+
+# Re-run review on same PR to verify fixes
+/git:review-pr https://github.com/owner/repo/pull/123
+# Automatically detects previous OpenCode reviews and:
+# - Verifies which comments were addressed
+# - Resolves satisfied comments
+# - Approves PR if all concerns addressed
+# - Posts new comments only for new issues
 ```
 
 **Priority**: Explicit PR URL takes precedence over auto-detection.
+
+**Re-Review Behavior**:
+When previous OpenCode review comments exist on the PR, the tool automatically switches to "re-review mode":
+- Verifies each previous comment against current code
+- Resolves comments that were satisfactorily addressed
+- Only posts new comments for new issues or unaddressed items
+- Approves PR if all previous concerns resolved and no new critical issues
+- Provides clear merge readiness signal to author
 
 ## Complete Workflow Example
 
@@ -41,6 +57,24 @@ Perform thorough, educational code reviews that help developers learn and improv
 3. Analyze code and generate review comments
 4. Present to user for approval  
 5. Post review to GitHub
+
+**Re-reviewing PR** (verification mode):
+1. User runs `/git:review-pr` on previously reviewed PR
+2. Tool detects previous OpenCode comments
+3. For each previous comment:
+   - Read current code at commented location
+   - Verify if issue was addressed
+   - Classify: ✅ Resolved | ⚠️ Partial | ❌ Not addressed
+4. Present verification summary to user
+5. Post verification replies on satisfied comments
+6. If ALL concerns addressed + no new critical issues:
+   - Approve PR with verification summary
+   - Signal "Ready to merge"
+7. If work remains:
+   - Post re-review summary with status table
+   - List outstanding items
+   - Post new comments only for new issues
+8. Clean up worktree if used
 
 ## Review Philosophy
 
@@ -201,7 +235,37 @@ Previously commented files:
 
 **IMPORTANT**: Analyze code directly. Do NOT use Task tool unless searching patterns across many files.
 
-**Analysis steps**:
+**For RE-REVIEWS**: First verify previous comments before analyzing for new issues.
+
+**Re-Review Verification Steps** (if previous OpenCode comments exist):
+
+1. **For each previous comment**:
+   - Read the file mentioned in the comment at the specified line
+   - Read surrounding context (±20 lines) to understand the change
+   - Compare current code against the issue described in the comment
+   - Determine status:
+     - ✅ **Resolved**: Issue no longer exists, code properly fixed
+     - ⚠️ **Partial**: Some improvement but incomplete fix
+     - ❌ **Not Addressed**: Issue still exists as originally described
+     - 🆕 **New Issue**: Fix introduced a new problem
+
+2. **Build verification summary**:
+   ```
+   Previous comment: "🚨 SQL injection vulnerability in login query"
+   File: auth.ts:42
+   
+   Original issue: Used string concatenation for SQL query
+   Current code: Uses parameterized query with placeholders
+   
+   Verification: ✅ RESOLVED - Properly implemented parameterized queries
+   ```
+
+3. **Calculate satisfaction score**:
+   - Critical comments resolved: [X]/[Y]
+   - Important comments resolved: [X]/[Y]
+   - All critical resolved AND (all important resolved OR acknowledged with plan) → READY FOR APPROVAL
+
+**Analysis steps** (for NEW issues or first review):
 1. Read the PR diff to identify changed files and line ranges
 2. Read 3-5 most important changed files for full context
 3. Analyze changes for issues (see priority categories below)
@@ -237,13 +301,15 @@ Only when you need to search patterns across many files to validate a concern.
 
 Example: "Search error handling patterns in src/controllers/*.ts to verify consistency"
 
-### Phase 5: Identify Issues
+### Phase 5: Identify Issues and Check Previous Comments
 
 **Comment limits**:
 - **First review**: Max 7-10 meaningful comments
-- **Re-review (2nd+ time)**: Max 3 comments, ONLY for NEW critical issues
+- **Re-review (2nd+ time)**: Max 3 comments, ONLY for NEW critical issues OR focus on verification
 
 **CRITICAL: Re-review filter (if previous OpenCode comments exist)**
+
+When re-running a review, your primary goal is to **verify if previous comments were addressed** and **resolve those that were fixed**.
 
 For each potential issue you want to comment on, ask:
 
@@ -261,19 +327,19 @@ For each potential issue you want to comment on, ask:
 
 4. **Is the current "issue" actually the FIX for the previous issue?**
    - Example: Using `Lock()` everywhere is SLOWER, but it FIXED the deadlock
-   - If YES → **DO NOT COMMENT** - this is an acceptable tradeoff
+   - If YES → **DO NOT COMMENT** - Mark as RESOLVED instead
    - If NO → The previous issue is unfixed or a new bug appeared → Comment
 
 5. **Apply the "Better than Before" rule:**
    - Is current code BETTER than before the fix? (even if imperfect)
-     - If YES → **DO NOT COMMENT**  
+     - If YES → **DO NOT COMMENT** - Mark as RESOLVED instead
      - If NO → Code got worse → Comment
 
 **Example of what NOT to comment on (re-review)**:
 ```
 Previous: "🚨 Deadlock from RLock→Lock→RLock upgrade pattern"
 Current:  Uses Lock() everywhere (slower but no deadlock)
-Decision: DO NOT comment on performance - the deadlock fix is more important
+Decision: DO NOT comment on performance - RESOLVE the previous comment instead
 ```
 
 **Scope filters** (ask yourself):
@@ -300,7 +366,9 @@ Decision: DO NOT comment on performance - the deadlock fix is more important
 
 **CRITICAL**: Present review to user for approval BEFORE posting.
 
-**Display format**:
+**For re-reviews with previous OpenCode comments**: Also present verification results.
+
+**Display format (first review)**:
 ```
 ## Review Summary for PR #[NUMBER]: [Title]
 
@@ -318,17 +386,52 @@ Decision: DO NOT comment on performance - the deadlock fix is more important
 **Post these comments to the PR?** (y/n)
 ```
 
+**Display format (re-review)**:
+```
+## Re-Review Summary for PR #[NUMBER]: [Title]
+
+**Previous OpenCode Review**: Found [X] previous comments from [date]
+
+**Verification Results**:
+- ✅ [X] Addressed satisfactorily (will resolve)
+- ⚠️ [X] Partially addressed (needs follow-up)
+- ❌ [X] Not addressed yet (remains open)
+- 🆕 [X] New issues found
+
+**Comments to resolve** (author addressed these):
+1. ✅ auth.ts:42 - SQL injection vulnerability → Fixed with parameterized queries
+2. ✅ utils.ts:55 - Variable naming → Renamed to `userProfiles`
+
+**Comments to keep open** (still need work):
+3. ⚠️ selector.ts:50 - Potential panic → Partially addressed, still needs bounds check
+
+**New comments to post**:
+4. 🚨 handler.ts:78 - New critical issue: Race condition introduced
+
+**Overall Assessment**:
+- Author addressed [X] out of [Y] previous comments ([Z]%)
+- [X] comments can be resolved
+- [Y] comments need more work
+- Ready for merge: YES/NO
+
+**Proceed with posting this re-review?** (y/n)
+- Will resolve [X] satisfied comments
+- Will keep [Y] comments open
+- Will post [Z] new comments
+```
+
 **Wait for user confirmation** before proceeding to Phase 7.
 
-### Phase 7: Post Review
+### Phase 7: Post Review and Resolve Comments
 
 **CRITICAL RULES**:
 - ✅ Post ALL comments + summary in ONE review via GitHub API
-- ✅ Every review MUST include at least one inline comment
+- ✅ Every review MUST include at least one inline comment OR be an approval
+- ✅ For re-reviews: Resolve addressed comments and post verification summary
 - ❌ NEVER post summary-only reviews (cannot be deleted via API)
 - ❌ NEVER use `gh pr review --comment` separately
 
-**Correct approach** (JSON to temp file):
+**For First Review** (JSON to temp file):
 
 ```bash
 # Get repository info
@@ -379,12 +482,208 @@ gh api "repos/${repo_info}/pulls/${pr_number}/reviews" \
 rm /tmp/review.json /tmp/review_body.txt
 ```
 
+**For Re-Review** (verify and resolve comments):
+
+```bash
+# Get repository info
+repo_info=$(gh repo view --json owner,name -q '.owner.login + "/" + .name')
+
+# Step 1: Resolve SATISFIED previous OpenCode comments
+# Get all unresolved previous OpenCode review comments
+previous_comments=$(gh api "repos/${repo_info}/pulls/${pr_number}/comments" \
+  --jq '[.[] | select(.body | contains("🤖 Generated by OpenCode")) | {id, path, line, body, pull_request_review_id}]')
+
+# For each comment that was addressed satisfactorily, resolve it
+# Resolving is done by creating a reply and then resolving the thread
+for comment in "${satisfied_comments[@]}"; do
+  comment_id="${comment[id]}"
+  
+  # Post verification reply to the comment
+  gh pr comment $pr_number --body "✅ **Verified - Addressed**
+
+The author has satisfactorily addressed this concern. The code now:
+${comment[verification]}
+
+Marking as resolved.
+
+---
+*🤖 Re-verified by OpenCode*"
+  
+  # Resolve the comment thread using GraphQL (REST API doesn't support this well)
+  # First get the thread ID from the comment
+  thread_id=$(gh api "repos/${repo_info}/pulls/comments/${comment_id}" --jq '.pull_request_review_id')
+  
+  # Note: Resolving threads requires GraphQL mutation
+  # For simplicity, use gh pr comment with resolved flag if available
+  # Otherwise, threads can be manually resolved by reviewers after reading verification
+done
+
+# Step 2: Post re-review summary
+all_satisfied=true  # Set based on verification results
+has_new_comments=false  # Set based on new issues found
+
+if [ "$all_satisfied" = true ] && [ "$has_new_comments" = false ]; then
+  # All previous comments addressed, no new issues - APPROVE PR
+  cat > /tmp/review_body.txt <<'EOF'
+## ✅ Re-Review Complete - APPROVED
+
+**Previous Review Status**:
+- ✅ [X] comments addressed satisfactorily (marked as resolved)
+- Total verification: [X]/[Y] items resolved
+
+**Verification Summary**:
+
+| Original Comment | File:Line | Status | Verification |
+|------------------|-----------|--------|--------------|
+| SQL injection | auth.ts:42 | ✅ Resolved | Now uses parameterized queries correctly |
+| Variable naming | utils.ts:55 | ✅ Resolved | Renamed to `userProfiles` |
+| Panic handling | selector.ts:50 | ✅ Resolved | Added bounds validation |
+
+**Overall Assessment**:
+All previous concerns have been addressed. The author has:
+- [Specific improvement 1]
+- [Specific improvement 2]
+- [Specific improvement 3]
+
+✅ **Ready to merge** - All review feedback has been satisfactorily implemented.
+
+Great work addressing all the feedback! 🎉
+
+---
+*🤖 Re-reviewed by OpenCode*
+EOF
+
+  # Post APPROVAL review (no inline comments needed for approval)
+  gh api "repos/${repo_info}/pulls/${pr_number}/reviews" \
+    --method POST \
+    -f event="APPROVE" \
+    -F body=@/tmp/review_body.txt
+  
+  echo "✅ PR APPROVED - All comments resolved, ready to merge"
+
+else
+  # Some comments not addressed or new issues found - post COMMENT review
+  cat > /tmp/review_body.txt <<'EOF'
+## 🔄 Re-Review Summary
+
+**Previous Review Status**:
+- ✅ [X] comments addressed satisfactorily (marked as resolved)
+- ⚠️ [Y] comments partially addressed (need follow-up)
+- ❌ [Z] comments not yet addressed
+
+**Verification Summary**:
+
+| Original Comment | File:Line | Status | Verification |
+|------------------|-----------|--------|--------------|
+| SQL injection | auth.ts:42 | ✅ Resolved | Now uses parameterized queries correctly |
+| Variable naming | utils.ts:55 | ✅ Resolved | Renamed to `userProfiles` |
+| Panic handling | selector.ts:50 | ⚠️ Partial | Added check but still needs bounds validation |
+
+**Outstanding Items**:
+- [List items that still need work]
+
+**New Issues** (if any):
+- [List new issues found]
+
+**Next Steps**:
+- Address remaining [Y] outstanding items
+- Once all addressed, will approve PR
+
+Great progress on the fixes! 👍
+
+---
+*🤖 Re-reviewed by OpenCode*
+EOF
+
+  # If there are new comments, create review with them
+  if [ "$has_new_comments" = true ]; then
+    cat > /tmp/review.json <<'EOF'
+{
+  "event": "COMMENT",
+  "comments": [
+    {
+      "path": "[file_path]",
+      "line": [line_number],
+      "body": "[New issue or follow-up comment]"
+    }
+  ]
+}
+EOF
+
+    gh api "repos/${repo_info}/pulls/${pr_number}/reviews" \
+      --method POST \
+      --input /tmp/review.json \
+      -F body=@/tmp/review_body.txt
+  else
+    # No new comments, just post verification summary as PR comment
+    gh pr comment $pr_number --body-file /tmp/review_body.txt
+  fi
+fi
+
+# Clean up
+rm -f /tmp/review.json /tmp/review_body.txt
+```
+
 **Key notes**:
 - Suggestion blocks: Use `\`\`\`suggestion` (no language specifier for "Apply" button)
 - Large reviews (>10 comments): Split into batches, full summary in LAST batch only
 - Every comment MUST end with: `---\n*🤖 Generated by OpenCode*`
 - Use `-F field=@file` or `-f field=value` instead of embedding in JSON to avoid escaping issues
 - Test API endpoints work before relying on them in automation
+
+**Comment Resolution Technical Details**:
+
+GitHub provides limited REST API support for resolving review threads. Here are the options:
+
+**Option 1: GraphQL API** (most reliable for programmatic resolution):
+```bash
+# Get the review thread ID for a comment
+thread_id=$(gh api graphql -f query='
+  query($owner: String!, $repo: String!, $pr: Int!) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $pr) {
+        reviewThreads(first: 100) {
+          nodes {
+            id
+            comments(first: 1) {
+              nodes {
+                databaseId
+              }
+            }
+          }
+        }
+      }
+    }
+  }' -f owner="$owner" -f repo="$repo" -F pr=$pr_number \
+  --jq ".data.repository.pullRequest.reviewThreads.nodes[] | select(.comments.nodes[0].databaseId == $comment_id) | .id")
+
+# Resolve the thread
+gh api graphql -f query='
+mutation($threadId: ID!) {
+  resolveReviewThread(input: {threadId: $threadId}) {
+    thread {
+      isResolved
+    }
+  }
+}' -f threadId="$thread_id"
+```
+
+**Option 2: Verification Summary** (simpler, recommended):
+- Post verification summary as PR comment with status table
+- Reviewers see clearly which comments were addressed
+- Reviewers manually resolve threads after verification
+- Works reliably without complex GraphQL queries
+- Better user experience with organized summary
+
+**Recommended approach**: Use Option 2 (verification summary) for simplicity and reliability. Only use GraphQL (Option 1) if programmatic resolution is absolutely required.
+
+**Re-Review Strategy**:
+1. **Verify each previous comment** against current code
+2. **Post verification replies** on satisfied comments
+3. **Track resolution status** in summary table
+4. **Approve if all satisfied** and no new critical issues
+5. **Post comment review** if work remains
+6. **Clear signal** to author about merge readiness
 
 ### Phase 8: Cleanup Worktree
 
@@ -409,13 +708,44 @@ fi
 
 ### Phase 9: Confirm Success
 
-Display confirmation message:
+Display confirmation message based on review type:
 
+**First Review**:
 ```
 ✅ Review posted successfully!
 
 Posted [X] inline comments to PR #[NUMBER]:
 - 🚨 [X] Critical | ⚠️ [X] Important | 💡 [X] Suggestions
+
+View: [PR_URL]
+```
+
+**Re-Review (with unresolved items)**:
+```
+✅ Re-review posted successfully!
+
+Verification results for PR #[NUMBER]:
+- ✅ Resolved: [X] comments (marked as resolved)
+- ⚠️ Still open: [Y] comments (need more work)
+- 🆕 New issues: [Z] comments
+
+Outstanding work before merge:
+- [List of items that still need attention]
+
+View: [PR_URL]
+```
+
+**Re-Review (all satisfied - APPROVED)**:
+```
+✅ PR APPROVED - Ready to merge! 🎉
+
+Re-review results for PR #[NUMBER]:
+- ✅ All [X] previous comments addressed
+- ✅ No new critical issues found
+- ✅ Code quality improved
+
+All review feedback has been satisfactorily implemented.
+Author can proceed with merging.
 
 View: [PR_URL]
 ```
@@ -625,7 +955,74 @@ gh pr review ${pr_number} --comment --body "## Review Summary..."
 }
 ```
 
-**Key rule**: Every review MUST include at least one inline comment.
+**Key rule**: Every review MUST include at least one inline comment (except APPROVE reviews).
+
+### Re-Review Comment Resolution
+
+**How to properly resolve previous comments**:
+
+```bash
+# 1. Post verification reply as a general PR comment (most reliable)
+gh pr comment $pr_number --body "## ✅ Previous Comments Verified
+
+| Comment | Status | Verification |
+|---------|--------|--------------|
+| auth.ts:42 SQL injection | ✅ Resolved | Uses parameterized queries |
+| utils.ts:55 Variable naming | ✅ Resolved | Renamed to userProfiles |
+
+---
+*🤖 Re-verified by OpenCode*"
+
+# 2. Then reviewers can manually resolve threads
+# OR use GraphQL to resolve programmatically (more complex):
+gh api graphql -f query='
+mutation {
+  resolveReviewThread(input: {threadId: "THREAD_ID_HERE"}) {
+    thread {
+      isResolved
+    }
+  }
+}'
+```
+
+**Important**:
+- GitHub's REST API doesn't have a simple endpoint for resolving threads
+- Posting verification summaries is most reliable
+- Reviewers can manually resolve after reading verification
+- Use approval reviews to signal all concerns addressed
+
+### Re-Review Example: From Issues to Approval
+
+**Initial review (3 comments)**:
+```
+🚨 auth.ts:42 - SQL injection vulnerability
+⚠️ controller.ts:85 - N+1 query problem  
+💡 utils.ts:55 - Variable naming
+```
+
+**Author makes fixes, you re-run `/git:review-pr`**:
+
+**Tool verifies**:
+- ✅ auth.ts:42 - Now uses parameterized queries (RESOLVED)
+- ✅ controller.ts:85 - Implemented batch loading (RESOLVED)
+- ✅ utils.ts:55 - Renamed to `userProfiles` (RESOLVED)
+- No new issues found
+
+**Tool posts**:
+```markdown
+## ✅ Re-Review Complete - APPROVED
+
+All 3 previous comments addressed satisfactorily:
+- ✅ SQL injection fixed with parameterized queries
+- ✅ N+1 query resolved with batch loading
+- ✅ Variable renamed for clarity
+
+✅ **Ready to merge** - All feedback implemented.
+
+Great work! 🎉
+```
+
+**Result**: PR approved, author can merge confidently.
 
 ## Error Handling
 
@@ -643,6 +1040,13 @@ Common error scenarios and responses:
   - Clean up any existing worktree at that path
 - **Worktree cleanup fails**: Force remove and warn user about manual cleanup if needed
 
+**Re-Review Specific**:
+- **Previous comment file moved/deleted**: Note in verification that file no longer exists
+- **Line numbers shifted**: Use fuzzy matching or note that code was restructured
+- **Cannot resolve threads via API**: Fall back to verification summary approach (let reviewers manually resolve)
+- **All comments already resolved**: Inform user and skip re-review, just check for new issues
+- **No changes since last review**: Warn user that code hasn't changed since last review
+
 ## Edge Cases
 
 Special PR scenarios to handle:
@@ -657,6 +1061,7 @@ Special PR scenarios to handle:
 
 A successful review meets these requirements:
 
+**First Review**:
 - ✅ Presents review to user for approval BEFORE posting
 - ✅ Includes OpenCode watermark on every comment and summary
 - ✅ Posts as inline comments on specific lines with context
@@ -665,6 +1070,23 @@ A successful review meets these requirements:
 - ✅ Balances constructive criticism with genuine praise
 - ✅ Gives clear, implementable next steps
 - ✅ Feels like learning from an experienced developer
+
+**Re-Review**:
+- ✅ Verifies each previous OpenCode comment against current code
+- ✅ Posts verification notes on addressed comments
+- ✅ Presents clear summary table showing status of all previous comments
+- ✅ Resolves satisfied comments (manually or via API)
+- ✅ Only posts NEW comments for NEW issues or unaddressed items
+- ✅ Approves PR if ALL concerns addressed and no new critical issues
+- ✅ Provides clear signal to author about merge readiness
+- ✅ Acknowledges author's progress on fixes
+
+**Merge Readiness Criteria** (for re-reviews):
+- ✅ ALL critical (🚨) comments addressed
+- ✅ ALL important (⚠️) comments addressed OR acknowledged with plan
+- ✅ NO new critical issues found
+- ✅ Code quality improved from previous review
+- ➡️ Result: APPROVE review + "Ready to merge" message
 
 ---
 
