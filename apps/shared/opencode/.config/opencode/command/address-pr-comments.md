@@ -452,7 +452,137 @@ git push origin HEAD
 echo "✅ Pushed ${commit_count} commits addressing review comments"
 ```
 
-### Phase 9: Display Summary
+### Phase 9: Verify CI/Tests Pass
+
+**CRITICAL**: After pushing changes, verify CI checks to ensure no regressions were introduced.
+
+```bash
+# Wait for checks to start (give GitHub Actions time to trigger)
+echo "⏳ Waiting for CI checks to start..."
+sleep 10
+
+# Check CI status
+echo "=== Checking CI status ==="
+gh pr checks $pr_number --watch
+
+# Get list of failed checks
+failed_checks=$(gh pr checks $pr_number --json name,conclusion,detailsUrl -q '.[] | select(.conclusion == "FAILURE") | {name, url: .detailsUrl}')
+
+if [ -n "$failed_checks" ]; then
+  echo "⚠️ CI checks failed after addressing comments"
+  echo ""
+  echo "Failed checks:"
+  echo "$failed_checks" | jq -r '"- " + .name'
+  echo ""
+  echo "=== Analyzing failures to determine if related to your changes ==="
+  echo ""
+  
+  # Present failed checks to user for analysis
+  # User must determine if failures are related to their changes
+  echo "Please review the failed checks:"
+  echo "$failed_checks" | jq -r '"\(.name): \(.url)"'
+  echo ""
+  echo "❓ Are these failures related to your changes?"
+  echo ""
+  echo "[1] Yes - my changes broke these tests (I need to fix them)"
+  echo "[2] No - these are unrelated/flaky tests (safe to proceed)"
+  echo "[3] Unsure - let me investigate the logs"
+  echo ""
+  read -p "Your choice (1-3): " choice
+  
+  case $choice in
+    1)
+      echo ""
+      echo "⚠️ ACTION REQUIRED: Fix test failures introduced by your changes"
+      echo ""
+      echo "Steps:"
+      echo "1. Review failed test logs above"
+      echo "2. Identify which changes caused the failures"
+      echo "3. Fix the issues (update code or tests)"
+      echo "4. Commit and push fixes"
+      echo "5. Re-run this workflow to verify fixes"
+      echo ""
+      exit 1
+      ;;
+    2)
+      echo ""
+      echo "✅ Proceeding - failures confirmed as unrelated to your changes"
+      echo ""
+      echo "📝 NOTE: Document this in your PR if needed:"
+      echo "   'CI failures in [test names] are pre-existing/unrelated to this PR'"
+      ;;
+    3)
+      echo ""
+      echo "🔍 Please investigate the failure logs:"
+      echo "$failed_checks" | jq -r '"\(.name): \(.url)"'
+      echo ""
+      echo "After investigation, re-run this workflow and choose option [1] or [2]"
+      exit 1
+      ;;
+  esac
+else
+  echo "✅ All CI checks passed!"
+fi
+```
+
+**Why this matters**:
+- Changes made to address review comments might introduce test failures
+- Test failures could indicate:
+  - Breaking changes to existing functionality
+  - Missing test updates for refactored code
+  - Edge cases not covered by your changes
+  - Integration issues with other components
+
+**However**: Not all CI failures are related to your changes:
+- **Pre-existing failures**: Tests that were already failing before your changes
+- **Flaky tests**: Tests that fail intermittently due to timing issues
+- **Infrastructure issues**: CI environment problems (network, dependencies, etc.)
+- **Unrelated changes**: Failures in test suites for code you didn't touch
+
+**What to do if tests fail**:
+
+1. **Investigate the failure**:
+   - Check test logs to understand what broke
+   - Compare: Did you modify the failing test or related code?
+   - Check PR file changes: Are failing tests in files you touched?
+
+2. **Determine if related to your changes**:
+   - ✅ **Related**: Failure in code/tests you modified → Fix it
+   - ❌ **Unrelated**: Failure in completely different module → Safe to proceed
+   - ❓ **Unsure**: Check git blame, ask in PR, or re-run tests
+
+3. **If related, fix the issues**:
+   ```bash
+   # Fix the code/tests
+   git add [files]
+   git commit -m "fix: update tests after addressing review comments
+   
+   - Fixed selector tests to handle new lock pattern
+   - Updated provider state tests for budget reset logic"
+   
+   git push origin HEAD
+   ```
+
+4. **If unrelated, document and proceed**:
+   - Note in PR comments that failures are pre-existing
+   - Optionally create separate issue to track the flaky test
+   - Complete the workflow
+
+**Example: Related failure**:
+```
+❌ Failed: Test BAAS - nodeproxy
+Cause: You modified nodeproxy/selector.go and broke SelectProvider test
+Action: Fix your code, commit, push
+```
+
+**Example: Unrelated failure**:
+```
+❌ Failed: Test BAAS - core  
+Cause: Failure in core/wallet_test.go, but you only touched nodeproxy/
+Action: Confirm unrelated, document if needed, proceed
+```
+
+### Phase 10: Display Summary
 
 Provide a comprehensive completion report:
 
@@ -482,16 +612,20 @@ Provide a comprehensive completion report:
 - All comments received inline responses with commit references
 - Reviewers will be notified of your replies on each thread
 
+**CI Status**: ✅ Verified (all passing or failures confirmed unrelated)
+- Checked all CI results after changes
+- No regressions introduced by review comment fixes
+
 **Next steps**:
 - All unresolved comments have been addressed
 - All changes have been pushed to remote
-- Reviewers will be notified of your comprehensive response
-- Consider requesting re-review from reviewers
+- CI checks verified (passing or unrelated failures documented)
+- Ready for re-review from reviewers
 
 View PR: [PR_URL]
 ```
 
-### Phase 10: Cleanup
+### Phase 11: Cleanup
 
 **CRITICAL**: If worktree was created, clean it up:
 
@@ -598,9 +732,9 @@ A successful session achieves:
 - ✅ Out-of-scope comments professionally rejected with follow-up issues
 - ✅ Disagreements explained with technical reasoning
 - ✅ Focused, well-described commits
-- ✅ All tests passing
+- ✅ **All CI checks verified** (passing or unrelated failures documented)
 - ✅ Changes pushed successfully
-- ✅ Clear summary of remaining work (both in PR comment and terminal output)
+- ✅ Clear summary of remaining work (in terminal output)
 - ✅ Worktree cleaned up (if used)
 - ✅ Reviewers have clear visibility into what was addressed and how
 
@@ -609,7 +743,7 @@ A successful session achieves:
 Before requesting re-review:
 - [ ] All 🚨 critical comments addressed or rejected with strong justification
 - [ ] All bug fixes have test cases
-- [ ] All tests pass locally
+- [ ] **All CI checks verified (passing or unrelated failures documented)**
 - [ ] Linter passes
 - [ ] All comments have direct thread replies with commit references
 - [ ] Out-of-scope items politely rejected with follow-up issues
