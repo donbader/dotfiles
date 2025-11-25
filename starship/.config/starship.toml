@@ -87,6 +87,8 @@ format = '[[ $symbol $branch ](fg:color_fg0 bg:color_line_3)]($style)'
 [git_status]
 style = "bg:color_line_3"
 format = '[[($all_status$ahead_behind )](fg:color_fg0 bg:color_line_3)]($style)'
+ahead = "⇡${count}"
+behind = "⇣${count}"
 
 [time]
 disabled = false
