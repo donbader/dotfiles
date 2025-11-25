@@ -80,11 +80,28 @@ This prevents commenting on intentional decisions or asking already-answered que
 
 ### Phase 1: Fetch PR Information (Single Bash Call)
 
+**IMPORTANT**: If user provides a PR URL, use that PR **regardless** of current branch. PR URL takes priority.
+
 ```bash
-current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); \
-pr_number=${PR_NUMBER:-$(gh pr view --json number -q .number 2>/dev/null)}; \
-if [ -z "$pr_number" ]; then echo "ERROR: No PR found"; exit 1; fi; \
+# Extract PR number from user-provided URL if given, otherwise use current branch
+if [ -n "$USER_PROVIDED_PR_URL" ]; then
+  # User provided explicit PR URL - use this (priority over current branch)
+  pr_number=$(echo "$USER_PROVIDED_PR_URL" | grep -oE '[0-9]+$')
+  echo "=== INFO: Using PR from provided URL (not current branch) ==="
+else
+  # No URL provided - fall back to current branch
+  pr_number=$(gh pr view --json number -q .number 2>/dev/null)
+fi
+
+if [ -z "$pr_number" ]; then 
+  echo "ERROR: No PR found. Provide a PR URL or ensure current branch has a PR."
+  exit 1
+fi
+
+current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+
 echo "=== PR_NUMBER ===" && echo "$pr_number" && \
+echo "=== CURRENT_BRANCH ===" && echo "$current_branch" && \
 echo "=== PR_METADATA ===" && gh pr view $pr_number --json title,body,author,headRefName,baseRefName,url && \
 echo "=== COMMIT_HISTORY ===" && gh pr view $pr_number --json commits -q '.commits[].commit | "\(.messageHeadline)\n---"' && \
 echo "=== FILES_CHANGED ===" && gh pr view $pr_number --json files -q '.files[] | "\(.path) (+\(.additions)/-\(.deletions))"' && \
@@ -92,10 +109,24 @@ echo "=== PR_DIFF ===" && gh pr diff $pr_number
 ```
 
 **Key points**:
+- **PR URL takes priority**: If user provides URL, use it even if current branch has different PR
 - Chain commands with `;` and `&&` for efficiency
 - Use `echo "=== SECTION ==="` markers to parse output
-- Extract PR number from URL if provided
+- Extract PR number from URL (format: `https://github.com/owner/repo/pull/123`)
 - **Capture PR body/description** - critical for context
+- Current branch is captured for info only (may differ from reviewed PR)
+
+**Example scenarios**:
+```
+Scenario 1: User on branch "feature-a" with PR #100, provides URL to PR #200
+→ Review PR #200 (from URL), ignore current branch's PR #100
+
+Scenario 2: User on branch "feature-a" with PR #100, no URL provided
+→ Review PR #100 (from current branch)
+
+Scenario 3: User on branch "main" (no PR), provides URL to PR #200
+→ Review PR #200 (from URL)
+```
 
 ### Phase 2: Understand PR Context
 
