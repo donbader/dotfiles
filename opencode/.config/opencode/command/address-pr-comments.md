@@ -5,16 +5,10 @@ description: Address and resolve code review comments on GitHub PRs
 
 # Address PR Review Comments
 
-Interactively address code review comments on GitHub PRs by implementing suggested changes and responding to reviewers.
+You are an AI agent specialized in helping developers address code review comments on GitHub Pull Requests. Your goal is to systematically process review feedback, implement changes, and maintain clear communication with reviewers.
 
-## Usage
+## Command Usage
 
-**Command syntax**:
-```bash
-/git:address-comments [PR_URL]
-```
-
-**Examples**:
 ```bash
 # Address comments on specific PR by URL
 /git:address-comments https://github.com/owner/repo/pull/123
@@ -25,145 +19,114 @@ Interactively address code review comments on GitHub PRs by implementing suggest
 
 **Priority**: Explicit PR URL takes precedence over auto-detection.
 
-## Complete Workflow Example
+## Core Philosophy
 
-**Addressing PR from URL** (uses worktree):
-1. User provides PR URL → Create worktree for that PR's branch
-2. Fetch PR comments and review threads
-3. Present comments to user with suggested actions
-4. Implement code changes based on user decisions
-5. Reply to comments (reviewers will mark as resolved)
-6. Push changes to remote
-7. Clean up worktree → User's original work unchanged
-
-**Addressing current branch** (no worktree):
-1. Auto-detect PR from current branch
-2. Fetch PR comments and review threads
-3. Present comments to user with suggested actions
-4. Implement code changes based on user decisions
-5. Reply to comments (reviewers will mark as resolved)
-6. Push changes to remote
-
-## Philosophy
-
-Addressing review comments should be:
+Your approach to addressing review comments should be:
 - **Systematic**: Process comments in logical order (file-by-file or by priority)
-- **Interactive**: User confirms each change before implementation
-- **Educational**: Understand WHY changes are requested
-- **Communicative**: Reply to reviewers with context about changes
-- **Thorough**: Track which comments are addressed vs. deferred
-- **Clean**: Keep commits focused and well-described
-- **Test-driven**: Add test cases for bug fixes to prevent regressions
+- **Interactive**: Always get user confirmation before implementing changes
+- **Intelligent**: Detect already-addressed issues and filter noise
+- **Communicative**: Reply to reviewers with clear context and commit references
+- **Thorough**: Track which comments are addressed, deferred, or rejected
+- **Test-driven**: Recommend test cases for bug fixes to prevent regressions
+- **Professional**: Handle disagreements respectfully with technical reasoning
 
-**Goal**: Efficiently address feedback while maintaining quality and clear communication with reviewers.
+## Step-by-Step Workflow
 
-## Workflow
+### Phase 1: Setup Environment
 
-### Phase 1: Setup Worktree (if needed)
-
-**IMPORTANT**: When addressing comments for a PR from a URL (not current branch), use git worktree to avoid disrupting user's work.
+**When PR URL is provided**: Create a git worktree to avoid disrupting user's current work.
 
 ```bash
-# Determine if we need a worktree
+# Extract PR number from URL or current branch
 if [ -n "$1" ]; then
-  # PR URL provided - extract PR number
   pr_number=$(echo "$1" | grep -oE '[0-9]+$')
   use_worktree=true
-  echo "=== Using PR from URL - will create worktree ==="
 else
-  # Use current branch
   pr_number=$(gh pr view --json number -q .number 2>/dev/null)
   use_worktree=false
 fi
 
-if [ -z "$pr_number" ]; then 
-  echo "ERROR: No PR found. Provide URL or ensure current branch has a PR."
-  exit 1
-fi
-
-# Setup worktree if needed
+# Create worktree if needed
 if [ "$use_worktree" = true ]; then
-  # Get PR branch name
   pr_branch=$(gh pr view $pr_number --json headRefName -q .headRefName)
-  
-  # Create unique worktree directory
   worktree_dir="/tmp/pr-address-${pr_number}-$$"
-  
-  # Fetch PR branch and create worktree
   git fetch origin "$pr_branch:$pr_branch" 2>/dev/null || git fetch origin "$pr_branch"
   git worktree add "$worktree_dir" "$pr_branch"
-  
-  # Change to worktree directory
   cd "$worktree_dir"
-  
-  echo "=== Created worktree at $worktree_dir ==="
 fi
 ```
 
-### Phase 2: Fetch PR Comments
+### Phase 2: Fetch PR Data
 
-**Single bash command** to fetch all required data:
+Gather all necessary information in a single command:
 
 ```bash
 echo "=== PR_NUMBER ===" && echo "$pr_number" && \
 echo "=== PR_METADATA ===" && gh pr view $pr_number --json title,body,author,url,headRefName && \
-echo "=== REVIEW_COMMENTS ===" && gh api "repos/{owner}/{repo}/pulls/${pr_number}/comments" --jq '.[] | {id, path, line, body, user: .user.login, created_at, in_reply_to_id}' && \
-echo "=== REVIEW_THREADS ===" && gh pr view $pr_number --json comments --jq '.comments[] | {id, body, author: .author.login, created_at}'
+echo "=== REVIEW_COMMENTS ===" && gh api "repos/{owner}/{repo}/pulls/${pr_number}/comments" --jq '.[] | select(.in_reply_to_id == null) | {id, path, line, body, user: .user.login, created_at, pull_request_review_id}' && \
+echo "=== REVIEW_THREADS ===" && gh pr view $pr_number --json comments --jq '.comments[] | {id, body, author: .author.login, created_at}' && \
+echo "=== COMMIT_HISTORY ===" && git log --oneline origin/main..HEAD
 ```
 
-**Key data captured**:
+**Data captured**:
 - PR metadata (title, branch, URL)
-- Inline code review comments with file paths and line numbers
-- General PR discussion comments
-- Comment IDs for replying and resolving
+- Top-level review comments (file path, line number, content)
+- Discussion thread comments
+- Recent commit history (for detecting already-addressed issues)
 
 ### Phase 3: Categorize and Present Comments
 
-**Organize comments by**:
-1. **File and line number** for inline comments
-2. **Unresolved vs. resolved status**
-3. **Type**: Critical issue, important, suggestion, question, praise
+**Smart filtering and organization**:
 
-**Present to user** in this format:
+1. **Auto-detect already addressed issues**:
+   - Check if files mentioned in comments were modified in recent commits
+   - Look for relevant keywords in commit messages
+   - Read current file state and compare with comment context
+   - Flag as "Possibly Already Addressed" if detected
+
+2. **Categorize by priority**:
+   - 🚨 **Critical**: Security, bugs, breaking changes (MUST address)
+   - ⚠️ **Important**: Performance, architecture violations (SHOULD address)
+   - 💡 **Suggestions**: Readability, best practices (NICE to address)
+   - ❓ **Questions**: Discussions, clarifications (REQUIRE response)
+   - ✅ **Praise**: Positive feedback (ACKNOWLEDGE)
+   - 🔍 **Possibly Addressed**: Already fixed in recent commits (VERIFY)
+
+3. **Present organized summary**:
 
 ```
-## Review Comments for PR #[NUMBER]: [Title]
+## Review Comments for PR #123: Add user authentication
 
-Found [X] unresolved comment threads:
+Found 6 unresolved comment threads:
 
 ### Critical Issues (require action)
 1. 🚨 src/auth.ts:42 - SQL injection vulnerability
    By: @reviewer | Created: 2 hours ago
    "This query is vulnerable to SQL injection..."
-   
    [Suggested action: Implement parameterized query]
 
-2. ⚠️ src/user-service.ts:85 - N+1 query problem
-   By: @reviewer | Created: 2 hours ago
-   "This creates 101 DB calls for 100 posts..."
-   
-   [Suggested action: Add batch query]
-
 ### Questions/Discussions
-3. ❓ src/config.ts:12 - Why polling instead of webhooks?
+2. ❓ src/config.ts:12 - Why polling instead of webhooks?
    By: @reviewer | Created: 1 hour ago
-   "Is there a reason for polling? Webhooks would be more efficient..."
-   
+   "Is there a reason for polling?..."
    [Suggested action: Reply with explanation]
 
 ### Suggestions
-4. 💡 src/utils.ts:55 - Variable naming
+3. 💡 src/utils.ts:55 - Variable naming
    By: @reviewer | Created: 30 mins ago
-   "Consider renaming `d` to `userProfiles` for clarity..."
-   
+   "Consider renaming `d` to `userProfiles`..."
    [Suggested action: Apply suggestion]
 
 ### Praise
-5. ✅ src/feature.ts:100 - Great implementation
+4. ✅ src/feature.ts:100 - Great implementation
    By: @reviewer | Created: 15 mins ago
-   "Excellent use of caching pattern here..."
-   
    [Suggested action: Acknowledge with emoji]
+
+### Possibly Already Addressed
+5. 🔍 src/auth.ts:30 - Missing error handling
+   By: @reviewer | Created: 3 days ago
+   [Note: File modified in abc123f "fix: add null checks"]
+   [Suggested action: Verify and reply if already fixed]
 
 ---
 How would you like to proceed?
@@ -173,149 +136,134 @@ How would you like to proceed?
 4. Skip and just view comments
 ```
 
-### Phase 4: Interactive Addressing
+### Phase 4: Interactive Comment Addressing
 
-**For each comment, present options**:
+For each comment, present the context and options:
 
 ```
-Comment 1/4: src/auth.ts:42 - SQL injection vulnerability
+Comment 1/6: src/auth.ts:42 - SQL injection vulnerability
 ---
 "This query is vulnerable to SQL injection. Use parameterized queries instead."
 
-Current code:
-```typescript
-const query = `SELECT * FROM users WHERE id = ${userId}`;
-const result = await db.query(query);
-```
+🔍 Smart Check: Analyzing if this might already be addressed...
+   - File last modified: 2 days ago (commit def456g)
+   - Commit message: "fix: add parameterized queries to auth"
+   - Current code shows parameterized queries in use
+   ⚠️ This appears to already be fixed! Consider option [8].
 
-Suggested fix (if available):
+Current code:
 ```typescript
 const query = 'SELECT * FROM users WHERE id = ?';
 const result = await db.query(query, [userId]);
 ```
 
-Actions:
-[1] Apply suggested fix
-[2] Show me the file and I'll fix it manually
-[3] Reply to reviewer (ask question or explain)
-[4] Reject - out of scope for this PR
-[5] Reject - doesn't make sense / disagree
-[6] Skip for now
-[7] Acknowledge with emoji (for praise comments)
-
-Your choice (1-7):
+GitHub suggestion (if available):
+```suggestion
+const query = 'SELECT * FROM users WHERE id = ?';
+const result = await db.query(query, [userId]);
 ```
 
-**User selection handling**:
+Actions:
+[1] Apply suggested fix (implement the change)
+[2] Show me the file and I'll fix it manually
+[3] Reply to reviewer (ask question or provide explanation)
+[4] Reject - out of scope for this PR
+[5] Reject - doesn't make sense / disagree
+[6] Skip for now (defer decision)
+[7] Acknowledge with emoji (for praise only)
+[8] Already addressed - reply to confirm
 
-**Option 1: Apply suggestion**
-- If GitHub suggestion block exists, apply it directly
-- If not, implement the fix based on the comment
-- Show diff to user for confirmation
-- **For critical bugs/issues**: Remind user to add test cases
-- Ask for commit message or use default: "fix: address review comment on {file}:{line}"
+Your choice (1-8):
+```
 
-**Option 2: Manual fix**
-- Read and display the file with context (±10 lines)
-- User makes changes using Edit tool
-- Confirm changes with diff
-- **For critical bugs/issues**: Remind user to add test cases
-- Ask for commit message
+### Phase 5: Handle User Selection
 
-**Option 3: Reply to reviewer**
-- Prompt user: "What would you like to say?"
+**[1] Apply suggested fix**:
+- Extract and apply GitHub suggestion block if available, otherwise implement based on comment
+- Show diff for user confirmation
+- For critical bugs (🚨): Prompt to add test case
+- Create focused commit with descriptive message
+- Get commit SHA for reply
+
+**[2] Manual fix**:
+- Read and display file with context (±10 lines around mentioned line)
+- User makes changes using available tools
+- Show diff for confirmation
+- For critical bugs (🚨): Prompt to add test case
+- Create focused commit
+
+**[3] Reply to reviewer**:
+- Prompt: "What would you like to say?"
 - Post reply via GitHub API
-- Do NOT mark as resolved (let reviewer do this)
+- Do NOT mark as resolved (let reviewer verify)
 
-**Option 4: Reject - out of scope for this PR**
-- Prompt user for brief reason (optional, provide smart default)
-- Post polite reply explaining it's out of scope
-- Example: "This is a valid point, but out of scope for this PR which focuses on [PR objective]. Let's track this in a separate issue."
-- Offer to create a follow-up issue automatically
-- Do NOT mark as resolved (let reviewer do this)
+**[4] Reject - out of scope**:
+- Prompt for reason (optional, provide smart default)
+- Post polite reply: "Valid point, but out of scope for this PR which focuses on [objective]"
+- Offer to create follow-up issue
+- Do NOT mark as resolved
 
-**Option 5: Reject - doesn't make sense / disagree**
-- Prompt user for explanation of why they disagree
-- Post respectful reply explaining the disagreement
-- Example: "I appreciate the suggestion, but [explanation of why current approach is preferred]."
-- Encourage discussion and provide technical reasoning
-- Do NOT mark as resolved (let reviewer decide after discussion)
+**[5] Reject - disagree**:
+- Prompt for technical explanation
+- Post respectful reply with reasoning
+- Encourage discussion
+- Do NOT mark as resolved (let reviewer respond)
 
-**Option 6: Skip**
+**[6] Skip for now**:
 - Add to "deferred" list
 - Continue to next comment
 
-**Option 7: Acknowledge with emoji (for praise)**
-- Post simple emoji reaction (👍 or 🙏)
-- Only available for praise/positive comments
+**[7] Acknowledge (praise)**:
+- Post emoji reaction (👍 or 🙏) or simple thank you
+- Only for positive comments
 
-### Phase 5: Implement Changes
+**[8] Already addressed**:
+- Verify the fix is in place by reading current file
+- Find the commit that addressed it
+- Post reply with commit SHA reference
+
+### Phase 6: Implement Changes
 
 **For each approved change**:
 
-1. **Apply the code change** using Edit tool
-2. **For critical bugs/issues (🚨)**: Prompt user to add test cases
-   - Ask: "Should we add a test case for this fix? (recommended for bug fixes)"
-   - If yes, help user create test case that reproduces the bug
-   - Show example test structure based on existing tests
-3. **Show diff** to user for confirmation
-4. **Create focused commit**:
+1. Apply the code change using appropriate tools
+2. Show diff to user for verification
+3. For critical bugs (🚨), prompt for test case:
+   ```
+   Should we add a test case for this fix? (recommended for bug fixes)
+   - Helps prevent regressions
+   - Documents expected behavior
+   - Increases reviewer confidence
+   ```
+4. Create focused commit:
    ```bash
-   git add [modified_files]
+   git add [files]
    git commit -m "fix: address review - [brief description]
    
    Addresses comment by @reviewer on [file]:[line]
    - [What was changed]
-   - [Why it was changed]"
+   - [Why it was changed]
+   [+ with test case]"
    ```
+5. Get commit SHA: `commit_sha=$(git rev-parse --short HEAD)`
 
 **Batching strategy**:
-- Group related changes in same file into one commit
-- Keep unrelated changes in separate commits
-- Use descriptive commit messages that reference the feedback
+- Group related changes in the same file into one commit
+- Keep unrelated changes separate
 - Include test cases in the same commit as the fix
 
-**Getting commit SHA for replies**:
-```bash
-# After committing, get the short SHA
-commit_sha=$(git rev-parse --short HEAD)
-```
+### Phase 7: Reply to Comments
 
-### Phase 6: Reply to Comments
-
-**Get commit SHA first**:
-```bash
-# Get short commit SHA after making changes
-commit_sha=$(git rev-parse --short HEAD)
-```
-
-**For each addressed comment**, post a reply:
+For each addressed comment, post a reply via GitHub API:
 
 ```bash
-# Get repository info
 repo_info=$(gh repo view --json owner,name -q '.owner.login + "/" + .name')
-
-# Reply to comment
 gh api "repos/${repo_info}/pulls/comments/${comment_id}/replies" \
   --method POST \
-  --field body="✅ **Addressed**
-
-[Brief explanation of what was changed]
-
-Fixed in commit: ${commit_sha}
-
----
-*🤖 Generated by OpenCode*"
+  --field body="[reply_template]"
 ```
 
-**For multi-comment fixes** (one commit addresses multiple comments):
-- Include the same commit SHA in all relevant replies
-- Mention in each reply that it was part of a larger fix
-- Example: "Fixed in commit: abc123f (along with related concurrency fixes)"
-
-**Important**: Do NOT mark conversations as resolved via API. Let reviewers verify and resolve threads themselves after reviewing your changes.
-
-**Reply templates**:
+**Reply Templates**:
 
 **For implemented fixes**:
 ```markdown
@@ -324,6 +272,18 @@ Fixed in commit: ${commit_sha}
 Implemented your suggestion - changed to use parameterized queries to prevent SQL injection.
 
 Fixed in commit: abc123f
+
+---
+*🤖 Generated by OpenCode*
+```
+
+**For already addressed**:
+```markdown
+✅ **Already Addressed**
+
+This was fixed in commit abc123f: "fix: add parameterized queries to auth"
+
+The code now uses parameterized queries as suggested. Thanks for catching this!
 
 ---
 *🤖 Generated by OpenCode*
@@ -341,11 +301,11 @@ Happy to explore webhooks again once those restrictions are lifted.
 *🤖 Generated by OpenCode*
 ```
 
-**For won't fix**:
+**For out of scope**:
 ```markdown
 ❌ **Out of Scope**
 
-This is a valid point, but it's outside the scope of this PR which focuses on fixing the authentication bug. 
+This is a valid point, but it's outside the scope of this PR which focuses on fixing the authentication bug.
 
 I've created issue #456 to track this improvement for a future PR.
 
@@ -367,7 +327,7 @@ The alternative you suggested would [explain tradeoff]. Happy to discuss further
 *🤖 Generated by OpenCode*
 ```
 
-**For praise/acknowledgment**:
+**For praise**:
 ```markdown
 🙏
 
@@ -375,72 +335,60 @@ The alternative you suggested would [explain tradeoff]. Happy to discuss further
 *🤖 Generated by OpenCode*
 ```
 
-Or simply use GitHub's emoji reaction feature instead of posting a comment.
+**Important**: NEVER mark conversations as resolved via API. Let reviewers verify and resolve.
 
-### Phase 7: Push Changes
+### Phase 8: Push Changes
 
-**After all changes are committed**:
+After all commits are created:
 
 ```bash
-# Push changes to remote
 git push origin HEAD
-
 echo "✅ Pushed ${commit_count} commits addressing review comments"
 ```
 
-### Phase 8: Summary
+### Phase 9: Display Summary
 
-**Display completion summary**:
+Provide a comprehensive completion report:
 
 ```
 ✅ Review Comments Addressed
 
 **Actions taken**:
 - ✅ Implemented: 3 comments
+- 🔍 Already addressed: 1 comment
 - 💬 Replied: 1 comment
 - 🙏 Acknowledged: 1 comment
-- ⏭️ Skipped: 1 comment
 - ❌ Rejected (out of scope): 1 comment
 - 💭 Rejected (disagreed): 0 comments
+- ⏭️ Skipped: 1 comment
 
 **Commits created**: 3
 - abc123f: fix: address SQL injection vulnerability in auth (+ tests)
 - def456g: refactor: implement batch query for user posts
 - ghi789h: refactor: improve variable naming in utils
 
-**Comments replied to**: 4/6 threads
+**Comments replied to**: 6/7 threads
 
 **Still needs attention** ⚠️:
 - 🚨 src/selector.ts:50 - Potential panic from RandomInt (CRITICAL)
-- 💡 src/utils.ts:74 - Off-by-one error in pruning logic
 
 **Next steps**:
-- 2 comments still need attention (see above)
+- 1 critical comment still needs attention (see above)
 - All changes have been pushed to remote
 - Reviewers will be notified of your responses
-- Consider addressing remaining comments before requesting re-review
+- Address remaining comments before requesting re-review
 
 View PR: [PR_URL]
 ```
 
-**Key improvements**:
-- Show unaddressed comments with priority level
-- Indicate which commits include tests
-- Provide actionable next steps
-- Warn about critical issues still pending
+### Phase 10: Cleanup
 
-### Phase 9: Cleanup Worktree
-
-**CRITICAL**: If a worktree was created, clean it up after pushing changes.
+**CRITICAL**: If worktree was created, clean it up:
 
 ```bash
 if [ "$use_worktree" = true ]; then
-  # Return to original directory
   cd - > /dev/null
-  
-  # Remove worktree
   git worktree remove "$worktree_dir" --force
-  
   echo "=== Cleaned up worktree ==="
 fi
 ```
@@ -453,92 +401,66 @@ Detect and extract GitHub suggestion blocks:
 ```markdown
 ```suggestion
 const query = 'SELECT * FROM users WHERE id = ?';
-const result = await db.query(query, [userId]);
 ```
 ```
 
-Apply these directly to the file at the specified line number.
+Apply these directly at the specified line number.
 
 ### Batch Operations
 
-Allow user to apply multiple suggestions at once:
+For non-controversial changes:
 ```
-Apply all non-controversial suggestions? (y/n)
+Apply all simple suggestions? (y/n)
 - ✅ Variable renaming (3 comments)
 - ✅ Import organization (2 comments)
 - ⏭️ Skipping architectural changes (requires discussion)
 ```
 
-### Comment Prioritization
-
-Sort comments by priority:
-1. **Critical** (🚨): Security, bugs, breaking changes - MUST address before merge
-2. **Important** (⚠️): Performance, architecture violations - Should address
-3. **Suggestions** (💡): Readability, best practices - Nice to address
-4. **Questions** (❓): Discussions, clarifications - Require response
-5. **Praise** (✅): Positive feedback - Acknowledge with emoji
-
 ### Conflict Detection
 
-Before applying changes, check for conflicts:
-- Has the file been modified since the comment was made?
-- Has the line number changed due to other commits?
-- Warn user and show current state vs. commented state
+Before applying changes:
+- Check if file was modified since comment was made
+- Verify line numbers haven't shifted
+- Warn if code context has changed
 
 ## Error Handling
 
-Common error scenarios:
-
+Handle common scenarios gracefully:
 - **No PR found**: Ask user for PR URL
-- **No comments found**: Inform user all comments are resolved
-- **Comment line no longer exists**: Warn user and show current file state
-- **Push fails**: Check for conflicts, suggest pulling first
-- **Permission errors**: Ensure `gh auth` has proper scopes
-- **Worktree creation fails**: Clean up and retry
-- **Git conflicts**: Guide user through manual resolution
+- **No unresolved comments**: Inform user all are addressed
+- **Comment line missing**: Show current file state
+- **Push fails**: Check for conflicts, suggest pulling
+- **Permission errors**: Check `gh auth` scopes
+- **Worktree fails**: Clean up and retry
+- **Git conflicts**: Guide through manual resolution
 
-## Edge Cases
+## Communication Best Practices
 
-Special scenarios to handle:
-
-- **Outdated comments**: Comments on lines that have changed - show diff
-- **Resolved threads**: Option to view and re-open if needed
-- **Multiple reviewers**: Group by reviewer, show consensus
-- **Suggestion conflicts**: Multiple reviewers suggest different changes
-- **Large PRs**: Allow filtering by file or reviewer
-- **Draft PRs**: Handle appropriately, note that reviews may be preliminary
-
-## Best Practices
-
-### Communication
-
-- **Always reply** when addressing a comment, even if just "Fixed ✅"
-- **Explain why** for rejections with clear technical reasoning
-- **Be respectful and professional** when disagreeing - focus on technical merits
-- **Ask clarifying questions** if comment is unclear
-- **Acknowledge praise** with simple emoji (🙏 or 👍)
+- **Always reply** when addressing comments (even brief "Fixed ✅")
+- **Be professional** when disagreeing - focus on technical merits
 - **Include commit SHA** in fix replies for easy verification
-- **Offer alternatives** when rejecting out-of-scope items (e.g., create follow-up issue)
-- **Stay on topic** - politely redirect off-topic comments to appropriate channels
+- **Offer alternatives** when rejecting (e.g., follow-up issues)
+- **Ask clarifying questions** if comments are unclear
+- **Stay on topic** - redirect off-topic items appropriately
 
-### Code Quality
+## Code Quality Standards
 
-- **Review before committing**: Always show diff for user confirmation
+- **Review before committing**: Always show diff for confirmation
 - **Keep commits focused**: One logical change per commit
-- **Write good commit messages**: Reference what comment was addressed
-- **Add test cases for bug fixes**: Prevent regressions (CRITICAL)
-- **Run linters/tests**: Before pushing changes
-- **Verify all tests pass**: Especially after adding new test cases
+- **Write descriptive commit messages**: Reference reviewer and location
+- **Add test cases for bug fixes**: Prevent regressions (CRITICAL for 🚨)
+- **Run linters/tests** before pushing
+- **Verify all tests pass** after changes
 
-### Testing Strategy for Bug Fixes
+## Testing Strategy for Bug Fixes
 
-When addressing critical bugs (🚨):
-1. **Write a failing test first** that reproduces the bug
-2. **Apply the fix** to make the test pass
-3. **Commit both together** - test + fix in same commit
-4. **Mention test in reply**: "Fixed in commit abc123f (with test case)"
+For critical bugs (🚨):
+1. Write a failing test that reproduces the bug
+2. Apply the fix to make test pass
+3. Commit both together (test + fix)
+4. Mention test in reply: "Fixed in commit abc123f (with test case)"
 
-Example test structure:
+Example:
 ```go
 func TestNoPanicWithSingleProvider(t *testing.T) {
     // Reproduces the bug from review comment
@@ -549,46 +471,33 @@ func TestNoPanicWithSingleProvider(t *testing.T) {
 }
 ```
 
-### Efficiency
-
-- **Batch related changes**: Combine small changes in same file
-- **Use suggestions directly**: When available and correct
-- **Skip non-issues**: Don't waste time on resolved/invalid comments
-- **Defer big changes**: Mark for separate PR if out of scope
-- **Reject politely but firmly**: Don't implement changes that don't align with PR goals
-- **Track progress**: Keep mental note of which comments still need attention
-- **Create follow-up issues**: For valid but out-of-scope suggestions
-
 ## Success Criteria
 
-A successful comment resolution session meets:
-
-- ✅ All critical comments addressed or explicitly deferred with good reason
-- ✅ Test cases added for all bug fixes (especially critical ones)
-- ✅ Replies posted for all addressed comments with commit SHAs
-- ✅ Out-of-scope comments politely rejected with explanation
+A successful session achieves:
+- ✅ All critical comments addressed or explicitly deferred with solid reasoning
+- ✅ Test cases added for all bug fixes (especially critical)
+- ✅ Replies posted for all comments with commit SHAs where applicable
+- ✅ Out-of-scope comments professionally rejected with follow-up issues
 - ✅ Disagreements explained with technical reasoning
-- ✅ Commits are focused and well-described
-- ✅ All tests pass after changes
-- ✅ Changes pushed to remote successfully
-- ✅ Reviewers can verify changes and mark conversations as resolved
-- ✅ Clear summary showing remaining unaddressed comments
+- ✅ Focused, well-described commits
+- ✅ All tests passing
+- ✅ Changes pushed successfully
+- ✅ Clear summary of remaining work
 - ✅ Worktree cleaned up (if used)
 
 ## Pre-merge Checklist
 
-Before requesting re-review, ensure:
-
-- [ ] All 🚨 critical comments are addressed (or explicitly rejected with good reason)
-- [ ] All bug fixes have corresponding test cases
+Before requesting re-review:
+- [ ] All 🚨 critical comments addressed or rejected with strong justification
+- [ ] All bug fixes have test cases
 - [ ] All tests pass locally
 - [ ] Linter passes
-- [ ] All addressed comments have replies with commit references
-- [ ] Out-of-scope comments are politely rejected with follow-up issues created where appropriate
-- [ ] Disagreements are explained respectfully with technical reasoning
-- [ ] Any remaining unaddressed comments are documented with reason
-- [ ] Praise comments are acknowledged
+- [ ] All comments have replies with commit references
+- [ ] Out-of-scope items politely rejected with follow-up issues
+- [ ] Disagreements explained respectfully with technical reasoning
+- [ ] Remaining unaddressed comments documented with reasons
+- [ ] Praise acknowledged
 
 ---
 
-**Remember**: Review comments are opportunities to improve code quality and learn from others. Address them thoughtfully and communicate clearly.
+**Remember**: Review comments are opportunities to improve code quality and learn from others. Address them thoughtfully, communicate clearly, and maintain professional relationships with your reviewers.
