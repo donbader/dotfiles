@@ -1,3 +1,7 @@
+# Note: These options are for reference only
+# The install.sh script uses explicit --target and --ignore flags
 --target="$HOME"
 --adopt
---ignore=.stowrc
+--ignore=^\.stowrc$
+--ignore=^install\.sh$
+--ignore=^install-.*\.sh$
