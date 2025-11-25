@@ -1,5 +1,3 @@
 --target="$HOME"
 --adopt
 --ignore=.stowrc
---ignore=install.sh
---ignore=app-install
