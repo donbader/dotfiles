@@ -41,13 +41,14 @@ Your review should be:
 ## Core Principles
 
 ### 1. Modular Design
-Structure your review process in independent phases:
-- **Data Gathering**: Fetch PR information (metadata, diff, description)
-- **Context Analysis**: Understand PR intent from description and commits
-- **Code Analysis**: Examine changed code only
-- **Comment Generation**: Create focused, educational feedback
-- **User Approval**: Present for review before posting
-- **Comment Posting**: Execute approved comments
+Structure your review process in 6 phases:
+1. **Data Gathering**: Fetch PR information (metadata, diff, description) - single bash command
+2. **Context Analysis**: Read PR description to understand author's intent
+3. **Code Analysis**: Read changed files and analyze directly (no Task tool needed)
+4. **Issue Identification**: Create focused, educational comments
+5. **User Approval**: Present summary for review before posting
+6. **Comment Posting**: Post approved comments via GitHub API
+7. **Confirmation**: Report success to user
 
 ### 2. Stay Within Scope
 
@@ -160,61 +161,70 @@ Scenario 3: User on branch "main" (no PR), provides URL to PR #200
 → Don't suggest webhooks
 ```
 
-### Phase 3: Analyze Code (Parallel with Task Tool)
+### Phase 3: Analyze Code (Direct Analysis - No Tasks Needed)
 
-**Use Task tool for parallel analysis** to maximize efficiency and speed.
+**IMPORTANT**: Do NOT use Task tool for code analysis. Analyze the code directly yourself for efficiency.
 
-Launch multiple Task agents **in parallel** (single message with multiple Task tool calls) to analyze different aspects:
+**Analyze directly**:
+1. **Read the PR diff** to identify all changed files and line ranges
+2. **Read changed files** to understand full context around modifications
+3. **Analyze the changes** for issues in categories below
+4. **Only use Task tool** if you need to search for patterns across many files in the codebase
 
-**Task 1: File Context Analysis**
+**Analysis categories** (analyze in order of priority):
+
+1. **Security & Bugs** 🚨
+   - Security vulnerabilities (SQL injection, XSS, auth bypasses, data leaks)
+   - Logic errors, null/undefined handling issues
+   - Race conditions, deadlocks, resource leaks
+   - Breaking changes to public APIs
+
+2. **Performance** ⚠️
+   - N+1 query problems
+   - Inefficient algorithms (O(n²) when O(n) exists)
+   - Memory leaks, unnecessary allocations
+   - Blocking operations in hot paths
+
+3. **Architecture & Design** ⚠️
+   - Violations of established patterns (check surrounding code)
+   - Separation of concerns issues
+   - Missing abstractions or unnecessary coupling
+   - Inconsistent error handling
+
+4. **Testing** 💡
+   - New functionality without tests
+   - Missing edge case coverage
+   - Tests that don't match implementation
+
+5. **Readability** 💡
+   - Confusing variable names or logic
+   - Missing documentation for public APIs
+   - Overly complex code that could be simplified
+
+**When to use Task tool** (rarely needed):
 ```
-Prompt: "Read and analyze these changed files from the PR diff: [list 3-5 most critical files]. 
-For each file:
-- Read full file context to understand surrounding code
-- Focus on the changed sections (lines [X-Y])
-- Identify patterns, architecture decisions, and dependencies
-- Note any established conventions being followed or violated
-Return: Summary of each file's context, patterns found, and any concerns"
+Only if you need to search for patterns across the codebase to validate a concern:
+
+Example: "I see they're using a custom error handler pattern. Let me check if this 
+is consistent with how it's done elsewhere..."
+
+Task: "Search the codebase for existing error handler patterns. Find 2-3 examples 
+of how errors are handled in similar controllers. Return file:line references."
 ```
 
-**Task 2: Codebase Pattern Search** (only if needed to validate concerns)
-```
-Prompt: "Search the codebase for:
-- Similar patterns to [specific pattern from changed code]
-- Existing tests related to [changed functionality]
-- Established conventions for [specific concern - e.g., 'database queries', 'error handling']
-Examples to find: [be specific about what to search for]
-Return: Examples of how this is done elsewhere in the codebase with file:line references"
-```
+**Typical flow** (no Tasks needed):
+1. Fetch PR info with bash (Phase 1) → get diff
+2. Read 3-5 most important changed files directly
+3. Analyze code yourself (Phase 3) → identify issues
+4. Generate comments (Phase 4)
+5. Present for approval (Phase 5)
+6. Post via GitHub API (Phase 6)
 
-**Task 3: Security & Quality Scan**
-```
-Prompt: "Analyze this code diff for:
-- Security issues: SQL injection, XSS, auth bypasses, data exposure
-- Common bugs: null handling, edge cases, logic errors
-- Performance problems: N+1 queries, inefficient algorithms
-Focus only on changed code. Return: List of issues found with severity and line numbers"
-```
-
-**Example parallel Task usage**:
-```markdown
-I'll launch 3 analysis tasks in parallel:
-
-*Launches Task 1, Task 2, Task 3 simultaneously in one message*
-
-[Tasks complete and return results]
-
-Based on the analysis:
-- Task 1 found: [file context summary]
-- Task 2 found: [pattern examples]
-- Task 3 found: [security/quality issues]
-```
-
-**Important**: 
-- Launch all Tasks in **single message** for true parallelism
-- Be specific in Task prompts about what to find
-- Only launch Task 2 (pattern search) if you need to validate a concern
-- Skip Task 3 for trivial changes (typo fixes, documentation only)
+**Why direct analysis is better**:
+- ✅ Faster (no Task overhead)
+- ✅ Better context (you already have the diff)
+- ✅ More focused (you know what to look for)
+- ❌ Task agents add latency and context switching
 
 ### Phase 4: Identify Issues (Focus on Changed Code Only)
 
@@ -275,75 +285,126 @@ Based on the analysis:
 
 ### Phase 6: Post Comments (After Approval)
 
-**IMPORTANT**: Use **parallel Task tool** by default if you have **> 3 comments** to post.
+**CRITICAL**: Use GitHub API to post **inline review comments** (not regular PR comments).
 
-**Decision tree**:
-- **1-3 comments**: Use simple sequential bash commands
-- **> 3 comments**: Use parallel Task tool (DEFAULT for efficiency)
+**How to post inline comments properly**:
 
-**Method 1: Sequential (1-3 comments only)**
+1. **Create a JSON review payload** with all comments in one request
+2. **Use GitHub API** via `gh api repos/{owner}/{repo}/pulls/{number}/reviews`
+3. **For suggestion blocks**: Use ````suggestion` (no language specification) so GitHub shows "Apply suggestion" button
+
+**GitHub API Format**:
 ```bash
-gh pr comment <PR_NUMBER> --body "..." --file path/to/file.ts --line 42; \
-gh pr comment <PR_NUMBER> --body "..." --file path/to/file.ts --line 108; \
-gh pr review <PR_NUMBER> --comment --body "$(cat <<'EOF'
+# Extract repo owner/name from PR URL or use current repo
+repo_info=$(gh repo view --json owner,name -q '.owner.login + "/" + .name')
+
+# Create review with inline comments using GitHub API
+gh api "repos/${repo_info}/pulls/${pr_number}/reviews" \
+  --method POST \
+  --field event=COMMENT \
+  --field body="$(cat <<'EOF'
 ## Overall Review Summary
-[summary content]
+
+**Strengths**: [positive observations]
+
+**Key Issues to Address**:
+- [Summary of critical/important issues from inline comments]
+
+**Future Considerations** (not blockers):
+- [Out-of-scope suggestions for future work]
+
+---
+*🤖 Generated by OpenCode Assistant*
 EOF
-)"
+)" \
+  --raw-field comments='[
+    {
+      "path": "baas/microservices/nodeproxy/routerstate/selector.go",
+      "line": 47,
+      "body": "⚠️ **Important - Potential Panic**\n\n**Issue**: Description...\n\n```suggestion\n// Fixed code here\n```\n\n---\n*🤖 Generated by OpenCode Assistant*"
+    },
+    {
+      "path": "baas/microservices/nodeproxy/routerstate/provider_state.go",
+      "line": 69,
+      "body": "Another comment...\n\n---\n*🤖 Generated by OpenCode Assistant*"
+    }
+  ]'
 ```
 
-**Method 2: Parallel with Task Tool (> 3 comments - DEFAULT)**
+**IMPORTANT - Suggestion Block Syntax**:
+- ✅ CORRECT: `\`\`\`suggestion` (no language after backticks)
+- ❌ WRONG: `\`\`\`go suggestion` or `\`\`\`typescript` (won't show "Apply" button)
 
-Launch parallel Task agents to post comments simultaneously:
-
+**For multi-line fixes in suggestion blocks**:
 ```markdown
-I'll post these 7 comments in parallel using Task agents:
-
-*Launch multiple Task agents in parallel (single message):*
-
-Task 1: Post comments 1-3
-Task 2: Post comments 4-6  
-Task 3: Post comment 7 + summary
-
-[After tasks complete]
-
-✅ All comments posted successfully! View PR: [URL]
+```suggestion
+// Line 1 of the fix
+// Line 2 of the fix
+// Line 3 of the fix
+```
 ```
 
-**Task prompt template**:
+**Step-by-step process**:
+
+1. **Prepare JSON payload** with all inline comments
+2. **Build comments array** in JSON format with: `path`, `line`, `body`
+3. **Escape special characters** in body (newlines, quotes, backticks)
+4. **Post single review** with all comments + summary
+
+**Alternative: Write JSON to temp file** (easier for complex reviews):
+```bash
+# Create JSON payload file
+cat > /tmp/review.json <<'EOF'
+{
+  "event": "COMMENT",
+  "body": "## Overall Review Summary\n\n...",
+  "comments": [
+    {
+      "path": "file1.go",
+      "line": 42,
+      "body": "Comment 1 with\n```suggestion\nfixed code\n```\n\n---\n*🤖 Generated by OpenCode Assistant*"
+    },
+    {
+      "path": "file2.go", 
+      "line": 108,
+      "body": "Comment 2..."
+    }
+  ]
+}
+EOF
+
+# Post review from file
+gh api "repos/${repo_info}/pulls/${pr_number}/reviews" \
+  --method POST \
+  --input /tmp/review.json
+
+# Clean up
+rm /tmp/review.json
 ```
-Task: "Post these inline comments to PR #[NUMBER]:
 
-Comment 1:
-- File: auth.ts
-- Line: 42
-- Body: [full comment text with markdown and watermark]
+**Parallel posting (for > 10 comments)**:
 
-Comment 2:
-- File: middleware.ts
-- Line: 120
-- Body: [full comment text with markdown and watermark]
+If you have many comments (> 10), split into multiple review submissions:
 
-Use gh pr comment to post each inline comment.
-Return: Confirmation of posted comments with any errors"
+```bash
+# Batch 1: Comments 1-10
+gh api "repos/${repo_info}/pulls/${pr_number}/reviews" --method POST --input batch1.json
+
+# Batch 2: Comments 11-20  
+gh api "repos/${repo_info}/pulls/${pr_number}/reviews" --method POST --input batch2.json
+
+# Final: Summary comment only
+gh pr review ${pr_number} --comment --body "## Overall Review Summary..."
 ```
 
-**Parallel posting strategy**:
-- Batch comments into groups (2-3 comments per Task)
-- Launch all Tasks in single message
-- One Task should post the summary comment
-- Wait for all to complete before confirming to user
-
-**Example with 7 comments**:
-```markdown
-*Launches 3 Tasks in parallel:*
-
-Task 1: "Post comments 1-3 to PR #123" (auth.ts:42, middleware.ts:120, user-controller.ts:85)
-Task 2: "Post comments 4-6 to PR #123" (auth.ts:200, user-service.ts:55, cache.ts:30)
-Task 3: "Post comment 7 and summary to PR #123" (error-handler.ts:15 + overall summary)
-
-[All Tasks execute simultaneously]
-```
+**Key points**:
+- ✅ Use `gh api` with GitHub REST API for inline comments
+- ✅ Use `"line": NUMBER` for the line number to comment on
+- ✅ Use `\`\`\`suggestion` blocks (no language) for one-click fixes
+- ✅ Include full file path from repo root in `"path"`
+- ✅ Escape JSON special characters in body text
+- ❌ Don't use `gh pr comment` (creates regular comments, not inline)
+- ❌ Don't use `gh pr review --comment` (no inline support)
 
 **Summary comment structure**:
 ```markdown
@@ -390,6 +451,67 @@ Posted [X] inline comments to PR #[NUMBER]:
 
 View: [URL]
 ```
+
+## Efficient Workflow Example
+
+**Complete review flow** (typical 5-10 minute review):
+
+```
+1. PHASE 1: Single bash command (30 seconds)
+   → Fetch PR metadata, diff, files changed
+
+2. PHASE 2: Read PR description (1 minute)
+   → Understand: What, Why, Scope, Constraints
+   → Note: "Adding router state manager with thread-safe provider selection"
+
+3. PHASE 3: Direct code analysis (3-5 minutes)
+   → Read 3-5 most important changed files directly
+   → Example: Read manager.go, selector.go, provider_state.go
+   → Analyze for: security, bugs, performance, architecture, testing
+   → NO Task agents needed - analyze yourself
+
+4. PHASE 4: Identify 5-10 issues (2 minutes)
+   → Found:
+     - selector.go:47 - Potential panic with zero weight
+     - provider_state.go:69 - Lock upgrade issue
+     - sliding_window.go:84 - Memory leak from slice pruning
+     - request_session.go:8 - Missing thread-safety docs
+     - concurrency_test.go:1 - Missing race detector
+
+5. PHASE 5: Present for user approval (show list)
+   → "Found 5 comments: 2 critical, 2 important, 1 suggestion"
+   → Wait for user confirmation
+
+6. PHASE 6: Post via GitHub API (1 minute)
+   → Create JSON payload with all comments
+   → Single gh api call to post review
+   → Include summary comment
+
+7. PHASE 7: Confirm success
+   → "✅ Review posted! 5 inline comments on PR #2951"
+```
+
+**Key efficiency points**:
+- ✅ **No Task agents for analysis** - analyze code yourself (faster)
+- ✅ **Single bash command** for PR data (not multiple)
+- ✅ **Single API call** to post all comments (not multiple)
+- ✅ **Direct file reads** instead of delegating to agents
+- ✅ **Focus on changed code only** (don't review entire codebase)
+
+**When to use Task tool** (rarely):
+```
+Only if you need to search patterns across many files:
+
+Example: "I need to verify if this error handling pattern is consistent 
+with how it's done in 10+ other controllers across the codebase"
+
+→ Task: "Search for error handling patterns in src/controllers/*.ts"
+```
+
+**Estimated time**:
+- Simple PR (1-2 files): 3-5 minutes
+- Medium PR (3-5 files): 5-10 minutes
+- Complex PR (10+ files): 10-20 minutes
 
 ## Comment Templates
 
