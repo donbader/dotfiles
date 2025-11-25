@@ -3,8 +3,6 @@
 format = """
 [](color_line_1)\
 $sudo\
-$os\
-$username\
 [](bg:color_line_2 fg:color_line_1)\
 $directory\
 [](fg:color_line_2 bg:color_line_3)\
@@ -21,7 +19,11 @@ $aws\
 $line_break$character"""
 
 right_format = """
-[](fg:color_line_6)\
+[](fg:color_line_4)\
+$os\
+[](bg:color_line_5 fg:color_line_4)\
+$username\
+[](bg:color_line_6 fg:color_line_5)\
 $time\
 [ ](fg:color_line_6)"""
 
@@ -42,7 +44,7 @@ color_purple = '#b16286'
 
 [os]
 disabled = false
-style = "bg:color_line_1 fg:color_fg0"
+style = "bg:color_line_4 fg:color_fg0"
 format = '[ $symbol]($style)'
 
 [os.symbols]
@@ -68,8 +70,8 @@ RedHatEnterprise = "󱄛"
 
 [username]
 show_always = true
-style_user = "bg:color_line_1 fg:color_fg0"
-style_root = "bg:color_line_1 fg:color_fg0"
+style_user = "bg:color_line_5 fg:color_fg0"
+style_root = "bg:color_line_5 fg:color_fg0"
 format = '[ $user ]($style)'
 
 [directory]
