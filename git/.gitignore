@@ -22,3 +22,6 @@ _corey*/
 # The encrypted file (otp_secrets.enc) is safe to commit
 otp_secrets.json
 otp_secrets.txt
+
+# Git worktree directories (for PR review workflows)
+.worktree/

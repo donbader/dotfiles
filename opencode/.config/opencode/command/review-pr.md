@@ -137,8 +137,12 @@ if [ "$use_worktree" = true ]; then
   # Get PR branch name
   pr_branch=$(gh pr view $pr_number --json headRefName -q .headRefName)
   
-  # Create unique worktree directory
-  worktree_dir="/tmp/pr-review-${pr_number}-$$"
+  # Get git repository root and create worktree directory
+  repo_root=$(git rev-parse --show-toplevel)
+  worktree_dir="${repo_root}/.worktree/pr-review-${pr_number}"
+  
+  # Create .worktree directory if it doesn't exist
+  mkdir -p "${repo_root}/.worktree"
   
   # Fetch PR branch and create worktree
   git fetch origin "$pr_branch:$pr_branch" 2>/dev/null || git fetch origin "$pr_branch"
@@ -635,7 +639,7 @@ Common error scenarios and responses:
 - **API rate limit**: Wait and retry with exponential backoff
 - **Worktree creation fails**: 
   - Check if branch exists and fetch if needed
-  - Ensure `/tmp` directory is writable
+  - Ensure `.worktree` directory is writable
   - Clean up any existing worktree at that path
 - **Worktree cleanup fails**: Force remove and warn user about manual cleanup if needed
 

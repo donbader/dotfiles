@@ -49,7 +49,14 @@ fi
 # Create worktree if needed
 if [ "$use_worktree" = true ]; then
   pr_branch=$(gh pr view $pr_number --json headRefName -q .headRefName)
-  worktree_dir="/tmp/pr-address-${pr_number}-$$"
+  
+  # Get git repository root and create worktree directory
+  repo_root=$(git rev-parse --show-toplevel)
+  worktree_dir="${repo_root}/.worktree/pr-address-${pr_number}"
+  
+  # Create .worktree directory if it doesn't exist
+  mkdir -p "${repo_root}/.worktree"
+  
   git fetch origin "$pr_branch:$pr_branch" 2>/dev/null || git fetch origin "$pr_branch"
   git worktree add "$worktree_dir" "$pr_branch"
   cd "$worktree_dir"
