@@ -106,25 +106,36 @@ linear-gradient(to right, #0f2027, #203a43, #2c5364)
 
 ### Step 2: Calculate Intermediate Steps
 
-For a 10-module gradient, you need 10 colors. Calculate evenly-spaced steps between your base colors.
+For a 10-step gradient across the full line, calculate evenly-spaced RGB values between your base colors.
 
 **Example calculation:**
-- Start: `#0f2027`
-- Middle: `#203a43`
-- End: `#2c5364`
+- Start: `#0f2027` (R=15, G=32, B=39)
+- Middle: `#203a43` (R=32, G=58, B=67)
+- End: `#2c5364` (R=44, G=83, B=100)
+
+**Formula for smooth transitions:**
+Calculate incremental steps for each RGB channel to create 10 evenly-distributed colors.
 
 Break into 10 steps:
 ```toml
-color_line_1 = '#0f2027'  # Start
-color_line_2 = '#152830'  # +1 step
-color_line_3 = '#1b3139'  # +2 steps
-color_line_4 = '#203a43'  # Middle (original)
-color_line_5 = '#24434b'  # +1 step from middle
-color_line_6 = '#284c54'  # +2 steps
-color_line_7 = '#2c5364'  # End (original)
-color_right_1 = '#35616f' # Continue beyond
-color_right_2 = '#3e6f7a' # ...
-color_right_3 = '#477d85' # Lightest
+color_line_1 = '#0f2027'  # Step 1: Darkest
+color_line_2 = '#14272f'  # Step 2
+color_line_3 = '#192f37'  # Step 3
+color_line_4 = '#1e373f'  # Step 4
+color_line_5 = '#233f47'  # Step 5
+color_line_6 = '#28474f'  # Step 6
+color_fill = '#2d4f57'    # Step 7: Middle (fill space)
+color_right_1 = '#32575f' # Step 8
+color_right_2 = '#375f67' # Step 9
+color_right_3 = '#3c676f' # Step 10: Lightest
+```
+
+**Pro tip:** Use online tools like [ColorHexa](https://www.colorhexa.com/) to calculate intermediate colors, or use this formula:
+```
+For each step i (0-9):
+  R_i = R_start + (R_end - R_start) * (i / 9)
+  G_i = G_start + (G_end - G_start) * (i / 9)
+  B_i = B_start + (B_end - B_start) * (i / 9)
 ```
 
 ### Step 3: Update the Palette
@@ -145,16 +156,16 @@ color_purple = '#b16286' # For special states
 
 ### Step 4: Map Colors to Modules
 
-Decide which module gets which color. Current mapping:
-- `color_line_1` → git_branch
-- `color_line_2` → git_commit, git_state
-- `color_line_3` → git_status, custom.git_metrics_workdir
-- `color_line_4` → directory
-- `color_line_5` → memory_usage
+Decide which module gets which color. Current mapping (single-line layout):
+- `color_line_1` → directory
+- `color_line_2` → git_branch
+- `color_line_3` → git_status
+- `color_line_4` → custom.git_metrics_workdir
+- `color_line_5` → git_state, git_commit
 - `color_line_6` → jobs
-- `color_line_7` → docker_context, kubernetes, aws
-- `color_right_1` → os
-- `color_right_2` → username
+- `color_fill` → fill (space between left and right)
+- `color_right_1` → docker_context, kubernetes, aws
+- `color_right_2` → memory_usage
 - `color_right_3` → time
 
 ### Step 5: Update Module Configurations
@@ -362,6 +373,44 @@ Check [Starship documentation](https://starship.rs/config/) for module-specific 
    style = "bg:color_line_8 fg:color_fg0"
    format = "[[ $symbol ](fg:color_fg0 bg:color_line_8)]($style)"
    ```
+
+### Task 7: Create a Single-Line Layout with Fill
+
+To put everything on one line with right-aligned content:
+
+1. **Move right_format content to main format:**
+   ```toml
+   format = """
+   [](color_line_1)\
+   $directory\
+   ...\
+   [](fg:color_line_6)\
+   $fill\
+   [](fg:color_right_1)\
+   $docker_context\
+   ...\
+   $line_break$character"""
+   
+   right_format = ""
+   ```
+
+2. **Configure the fill module:**
+   ```toml
+   [fill]
+   symbol = " "
+   style = "bg:color_fill"
+   ```
+
+3. **Add fill color to palette:**
+   ```toml
+   color_fill = '#2d4f57'  # Transition color between left and right
+   ```
+
+4. **Add separators around fill:**
+   - Before fill: `[](fg:color_line_6 bg:color_fill)\`
+   - After fill: `[](bg:color_right_1 fg:color_fill)\`
+
+The `$fill` module automatically expands to fill available terminal width, pushing right-side content to the edge while maintaining the gradient.
 
 ---
 

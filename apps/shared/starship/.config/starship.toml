@@ -15,37 +15,39 @@ $git_state\
 $git_commit\
 [](fg:color_line_5 bg:color_line_6)\
 $jobs\
-[](fg:color_line_6)\
-$line_break$character"""
-
-right_format = """
-[](fg:color_right_1)\
+[](fg:color_line_6 bg:color_line_7)\
+$fill\
+[](bg:color_line_8 fg:color_line_7)\
 $docker_context\
 $kubernetes\
 $aws\
-[](bg:color_right_2 fg:color_right_1)\
+[](bg:color_line_9 fg:color_line_8)\
 $memory_usage\
-[](bg:color_right_3 fg:color_right_2)\
+[](bg:color_line_10 fg:color_line_9)\
 $time\
-[ ](fg:color_right_3)"""
+[](fg:color_line_10)\
+$line_break$character"""
+
+right_format = ""
 
 palette = 'teal_gradient'
 
 [palettes.teal_gradient]
 color_fg0 = '#ffffff'
 color_fg1 = '#000000'
-# "Deep Sea Space" gradient - Option 1: Developer-Focused Layout
-# Left prompt: Directory → Git Branch → Git Status → Git Metrics → Git State/Commit → Jobs
-color_line_1 = '#0f2027'   # directory - Deepest dark (where am I?)
-color_line_2 = '#152830'   # git_branch - Dark (what branch?)
-color_line_3 = '#1b3139'   # git_status - Medium dark (any changes?)
-color_line_4 = '#203a43'   # custom git_metrics - Mid dark (how much?)
-color_line_5 = '#24434b'   # git_state/git_commit - Mid (special state?)
-color_line_6 = '#284c54'   # jobs - Mid light (background tasks?)
-# Right prompt: Docker/K8s/AWS → Memory → Time
-color_right_1 = '#2c5364'  # docker/k8s/aws - Environment context
-color_right_2 = '#35616f'  # memory_usage - System monitoring
-color_right_3 = '#3e6f7a'  # time - Lightest
+# "Deep Sea Space" gradient - Mathematically smooth 10-step progression
+# Single-line layout: directory → git info → jobs → [fill] → cloud/env → memory → time
+# Linear interpolation for perfectly even brightness increments (~3.8% per step)
+color_line_1 = '#0f2027'   # Step 1: directory (11.2% brightness)
+color_line_2 = '#162a32'   # Step 2: git_branch (14.9%)
+color_line_3 = '#1d353e'   # Step 3: git_status (18.8%)
+color_line_4 = '#24404a'   # Step 4: git_metrics (22.7%)
+color_line_5 = '#2b4a55'   # Step 5: git_state/commit (26.4%)
+color_line_6 = '#335561'   # Step 6: jobs (30.5%)
+color_line_7 = '#3a606d'   # Step 7: fill (34.4%)
+color_line_8 = '#416a78'   # Step 8: docker/k8s/aws (38.0%)
+color_line_9 = '#487584'   # Step 9: memory (42.0%)
+color_line_10 = '#508090'  # Step 10: time (46.0% brightness)
 # Status colors
 color_green = '#98971a'
 color_red = '#cc241d'
@@ -106,7 +108,7 @@ disabled = true
 [custom.git_metrics_workdir]
 command = """git diff --numstat 2>/dev/null | awk '{added+=$1; deleted+=$2} END {if (added > 0 || deleted > 0) {if (added > 0) printf "\\033[38;2;152;151;26m+%d\\033[39m", added; if (added > 0 && deleted > 0) printf " "; if (deleted > 0) printf "\\033[38;2;204;36;29m-%d\\033[39m", deleted; printf " "}}'"""
 when = "git rev-parse --is-inside-work-tree 2>/dev/null"
-format = "[[$output](fg:color_fg0 bg:color_line_4)]($style)"
+format = "[[ $output ](fg:color_fg0 bg:color_line_4)]($style)"
 style = "bg:color_line_4"
 description = "Show git diff stats for working directory with colors"
 
@@ -138,13 +140,13 @@ disabled = false
 [time]
 disabled = false
 time_format = "%F %T"
-style = "bg:color_right_3"
-format = '[[  $time ](fg:color_fg0 bg:color_right_3)]($style)'
+style = "bg:color_line_10"
+format = '[[  $time ](fg:color_fg0 bg:color_line_10)]($style)'
 
 [memory_usage]
 disabled = false
 threshold = -1
-style = "bg:color_right_2 fg:color_fg0"
+style = "bg:color_line_9 fg:color_fg0"
 format = '[ $ram]($style)'
 
 [jobs]
@@ -154,18 +156,22 @@ format = '[ $number]($style)'
 
 [docker_context]
 disabled = false
-style = "bg:color_right_1 fg:color_fg0"
+style = "bg:color_line_8 fg:color_fg0"
 format = '[ $symbol$context]($style)'
 
 [kubernetes]
 disabled = false
-style = "bg:color_right_1 fg:color_fg0"
+style = "bg:color_line_8 fg:color_fg0"
 format = '[ $symbol$context]($style)'
 
 [aws]
 disabled = false
-style = "bg:color_right_1 fg:color_fg0"
+style = "bg:color_line_8 fg:color_fg0"
 format = '[ $symbol$profile]($style)'
+
+[fill]
+symbol = " "
+style = "bg:color_line_7"
 
 [line_break]
 disabled = false
