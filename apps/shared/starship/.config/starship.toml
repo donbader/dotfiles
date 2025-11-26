@@ -7,26 +7,34 @@ $directory\
 [](bg:color_line_2 fg:color_line_1)\
 $jobs\
 [](bg:color_line_3 fg:color_line_2)\
+[ ](bg:color_line_3)\
+[](bg:color_line_4 fg:color_line_3)\
+[ ](bg:color_line_4)\
+[](bg:color_line_5 fg:color_line_4)\
+$fill\
+[](bg:color_line_6 fg:color_line_5)\
+[ ](bg:color_line_6)\
+[](bg:color_line_7 fg:color_line_6)\
+[ ](bg:color_line_7)\
+[](bg:color_line_8 fg:color_line_7)\
+$docker_context\
+$kubernetes\
+$aws\
+[](bg:color_line_9 fg:color_line_8)\
+$os\
+[](bg:color_line_10 fg:color_line_9)\
+$username\
+[](bg:color_line_11 fg:color_line_10)\
+$time\
+[](fg:color_line_11)\
+$line_break\
 $git_branch\
 $git_status\
 $git_state\
 $git_commit\
-[](bg:color_line_4 fg:color_line_3)\
 ${custom.git_metrics_workdir}\
-[](bg:color_line_5 fg:color_line_4)\
-$fill\
-[](bg:color_line_6 fg:color_line_5)\
-$docker_context\
-$kubernetes\
-$aws\
-[](bg:color_line_7 fg:color_line_6)\
-$os\
-[](bg:color_line_8 fg:color_line_7)\
-$username\
-[](bg:color_line_9 fg:color_line_8)\
-$time\
-[](fg:color_line_9)\
-$line_break$character"""
+$line_break\
+$character"""
 
 right_format = ""
 
@@ -35,19 +43,22 @@ palette = 'teal_gradient'
 [palettes.teal_gradient]
 color_fg0 = '#ffffff'
 color_fg1 = '#000000'
-# Dark Blue to Teal gradient - Smooth 9-step progression
-# Single-line layout: directory → jobs → [git section] → git_metrics → fill → cloud → os → username → time
-# Git components (branch/status/state/commit) share same color for unified visual section
+# Dark Blue to Teal gradient - Smooth progression for Line 1
+# Line 1: directory → jobs → space1 → space2 → fill → space3 → space4 → cloud → os → username → time (11 sections, smooth gradient)
+# Line 2: git components use normal background (no custom colors)
 # Gradient from dark blue-grey (#16222A) to steel teal (#3A6073)
-color_line_1 = '#16222a'   # directory - 12.3% brightness
-color_line_2 = '#1a2933'   # jobs - 14.8% brightness
-color_line_3 = '#1f313c'   # git section - 17.6% brightness
-color_line_4 = '#233945'   # git_metrics - 20.3% brightness
-color_line_5 = '#28414e'   # fill - 23.1% brightness
-color_line_6 = '#2c4857'   # docker/k8s/aws - 25.6% brightness
-color_line_7 = '#315060'   # os - 28.5% brightness
-color_line_8 = '#355869'   # username - 31.2% brightness
-color_line_9 = '#3a6073'   # time - 34.0% brightness
+# Line 1 gradient: 11 steps from #16222a to #3a6073
+color_line_1 = '#16222a'   # Line 1: directory - step 1/11
+color_line_2 = '#1a2830'   # Line 1: jobs - step 2/11
+color_line_3 = '#1e2f36'   # Line 1: space1 - step 3/11
+color_line_4 = '#22353c'   # Line 1: space2 - step 4/11
+color_line_5 = '#263b42'   # Line 1: fill - step 5/11
+color_line_6 = '#2a4248'   # Line 1: space3 - step 6/11
+color_line_7 = '#2e484e'   # Line 1: space4 - step 7/11
+color_line_8 = '#324f54'   # Line 1: cloud services - step 8/11
+color_line_9 = '#36555a'   # Line 1: os - step 9/11
+color_line_10 = '#3a5c60'  # Line 1: username - step 10/11
+color_line_11 = '#3a6073'  # Line 1: time - step 11/11
 # Status colors
 color_green = '#98971a'
 color_red = '#cc241d'
@@ -56,8 +67,8 @@ color_purple = '#b16286'
 
 [os]
 disabled = false
-style = "bg:color_line_7"
-format = '[[ $symbol](fg:color_fg0 bg:color_line_7)]($style)'
+style = "bg:color_line_9"
+format = '[[ $symbol](fg:color_fg0 bg:color_line_9)]($style)'
 
 [os.symbols]
 Windows = "󰍲"
@@ -82,9 +93,9 @@ RedHatEnterprise = "󱄛"
 
 [username]
 disabled = false
-style_user = "bg:color_line_8"
-style_root = "bg:color_line_8"
-format = '[[ $user](fg:color_fg0 bg:color_line_8)]($style)'
+style_user = "bg:color_line_10"
+style_root = "bg:color_line_10"
+format = '[[ $user](fg:color_fg0 bg:color_line_10)]($style)'
 show_always = true
 
 [directory]
@@ -97,8 +108,8 @@ truncation_symbol = "…/"
 # Git Branch - Shows current branch with icon (like p10k's vcs-branch)
 [git_branch]
 symbol = ""
-style = "bg:color_line_3"
-format = '[[ $symbol $branch ](fg:color_fg0 bg:color_line_3)]($style)'
+style = "fg:color_fg0"
+format = '[ $symbol $branch ]($style)'
 truncation_length = 20
 truncation_symbol = "…"
 ignore_branches = []
@@ -107,15 +118,15 @@ ignore_branches = []
 [git_commit]
 commit_hash_length = 8
 only_detached = true
-style = "bg:color_line_3"
-format = '[[ $hash$tag ](fg:color_fg0 bg:color_line_3)]($style)'
+style = "fg:color_fg0"
+format = '[ $hash$tag ]($style)'
 tag_symbol = " 🏷 "
 tag_disabled = false
 
 # Git State - Shows operations like rebase, merge, cherry-pick (like p10k's vcs-action)
 [git_state]
-style = "bg:color_line_3"
-format = '[[ $state( $progress_current/$progress_total) ](fg:color_fg0 bg:color_line_3)]($style)'
+style = "fg:color_fg0"
+format = '[ $state( $progress_current/$progress_total) ]($style)'
 rebase = "REBASING"
 merge = "MERGING"
 revert = "REVERTING"
@@ -130,19 +141,19 @@ am_or_rebase = "AM/REBASE"
 disabled = true
 
 # Custom Git Metrics - Shows +/- only for uncommitted changes in working directory
-# Uses ANSI color codes only for foreground colors, let Starship handle background
+# Uses ANSI color codes for colored output on normal background
 [custom.git_metrics_workdir]
-command = """git diff --numstat 2>/dev/null | awk '{added+=$1; deleted+=$2} END {if (added > 0 || deleted > 0) {if (added > 0) printf "\\033[38;2;152;151;26m+%d\\033[39m", added; if (added > 0 && deleted > 0) printf " "; if (deleted > 0) printf "\\033[38;2;204;36;29m-%d\\033[39m", deleted; printf " "}}'"""
+command = """git diff --numstat 2>/dev/null | awk '{added+=$1; deleted+=$2} END {if (added > 0 || deleted > 0) {if (added > 0) printf "\\033[38;2;152;151;26m+%d\\033[0m", added; if (added > 0 && deleted > 0) printf " "; if (deleted > 0) printf "\\033[38;2;204;36;29m-%d\\033[0m", deleted; printf " "}}'"""
 when = "git rev-parse --is-inside-work-tree 2>/dev/null"
-format = "[[$output](fg:color_fg0 bg:color_line_4)]($style)"
-style = "bg:color_line_4"
+format = "[$output]($style)"
+style = "fg:color_fg0"
 description = "Show git diff stats for working directory with colors"
 
 # Git Status - Comprehensive status indicators (like p10k's vcs-status)
 # This shows working tree status with various symbols
 [git_status]
-style = "bg:color_line_3"
-format = '[[($all_status$ahead_behind )](fg:color_fg0 bg:color_line_3)]($style)'
+style = "fg:color_fg0"
+format = '[($all_status$ahead_behind )]($style)'
 # Conflict indicators
 conflicted = "=${count} "
 # Remote tracking
@@ -166,13 +177,13 @@ disabled = false
 [time]
 disabled = false
 time_format = "%F %T"
-style = "bg:color_line_9"
-format = '[[  $time ](fg:color_fg0 bg:color_line_9)]($style)'
+style = "bg:color_line_11"
+format = '[[  $time ](fg:color_fg0 bg:color_line_11)]($style)'
 
 [memory_usage]
 disabled = false
 threshold = -1
-style = "bg:color_line_9 fg:color_fg0"
+style = "bg:color_line_11 fg:color_fg0"
 format = '[ $ram]($style)'
 
 [jobs]
@@ -182,17 +193,17 @@ format = '[ $number]($style)'
 
 [docker_context]
 disabled = false
-style = "bg:color_line_6 fg:color_fg0"
+style = "bg:color_line_8 fg:color_fg0"
 format = '[ $symbol$context]($style)'
 
 [kubernetes]
 disabled = false
-style = "bg:color_line_6 fg:color_fg0"
+style = "bg:color_line_8 fg:color_fg0"
 format = '[ $symbol$context]($style)'
 
 [aws]
 disabled = false
-style = "bg:color_line_6 fg:color_fg0"
+style = "bg:color_line_8 fg:color_fg0"
 format = '[ $symbol$profile]($style)'
 
 [fill]
