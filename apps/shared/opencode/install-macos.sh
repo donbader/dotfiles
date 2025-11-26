@@ -1,2 +1,2 @@
 #!/bin/bash
-brew install opencode
+curl -fsSL https://opencode.ai/install | bash
