@@ -4,14 +4,13 @@ format = """
 [](color_line_1)\
 $sudo\
 [](bg:color_line_2 fg:color_line_1)\
-$directory\
-[](fg:color_line_2 bg:color_line_3)\
 $git_branch\
 $git_commit\
 $git_state\
-${custom.git_metrics_added}\
-${custom.git_metrics_deleted}\
 $git_status\
+${custom.git_metrics_workdir}\
+[](fg:color_line_2 bg:color_line_3)
+$directory\
 [](fg:color_line_3 bg:color_line_4)\
 $memory_usage\
 $jobs\
@@ -121,23 +120,13 @@ am_or_rebase = "AM/REBASE"
 disabled = true
 
 # Custom Git Metrics - Shows +/- only for uncommitted changes in working directory
-# Split into two modules to allow different colors for additions (green) and deletions (red)
-
-# Git Metrics - Additions (green)
-[custom.git_metrics_added]
-command = """git diff --numstat 2>/dev/null | awk '{added+=$1} END {if (added > 0) print "+" added}'"""
+# Uses ANSI color codes only for foreground colors, let Starship handle background
+[custom.git_metrics_workdir]
+command = """git diff --numstat 2>/dev/null | awk '{added+=$1; deleted+=$2} END {if (added > 0 || deleted > 0) {if (added > 0) printf "\\033[38;2;152;151;26m+%d\\033[39m", added; if (added > 0 && deleted > 0) printf " "; if (deleted > 0) printf "\\033[38;2;204;36;29m-%d\\033[39m", deleted; printf " "}}'"""
 when = "git rev-parse --is-inside-work-tree 2>/dev/null"
-format = "[[$output](fg:color_green bg:color_line_3)]($style)"
+format = "[[ $output ](fg:color_fg0 bg:color_line_3)]($style)"
 style = "bg:color_line_3"
-description = "Show git additions for working directory"
-
-# Git Metrics - Deletions (red)
-[custom.git_metrics_deleted]
-command = """git diff --numstat 2>/dev/null | awk '{deleted+=$2} END {if (deleted > 0) print " -" deleted}'"""
-when = "git rev-parse --is-inside-work-tree 2>/dev/null"
-format = "[[$output ](fg:color_red bg:color_line_3)]($style)"
-style = "bg:color_line_3"
-description = "Show git deletions for working directory"
+description = "Show git diff stats for working directory with colors"
 
 # Git Status - Comprehensive status indicators (like p10k's vcs-status)
 # This shows working tree status with various symbols
