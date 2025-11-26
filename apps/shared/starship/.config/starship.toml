@@ -3,31 +3,28 @@
 format = """
 [](color_line_1)\
 $sudo\
-$git_branch\
+$directory\
 [](bg:color_line_2 fg:color_line_1)\
-$git_commit\
-$git_state\
+$git_branch\
 [](bg:color_line_3 fg:color_line_2)\
 $git_status\
+[](bg:color_line_4 fg:color_line_3)\
 ${custom.git_metrics_workdir}\
-[](fg:color_line_3 bg:color_line_4)\
-$directory\
-[](fg:color_line_4 bg:color_line_5)\
-$memory_usage\
+[](bg:color_line_5 fg:color_line_4)\
+$git_state\
+$git_commit\
 [](fg:color_line_5 bg:color_line_6)\
 $jobs\
-[](fg:color_line_6 bg:color_line_7)\
-$docker_context\
-$kubernetes\
-$aws\
-[](fg:color_line_7)\
+[](fg:color_line_6)\
 $line_break$character"""
 
 right_format = """
 [](fg:color_right_1)\
-$os\
+$docker_context\
+$kubernetes\
+$aws\
 [](bg:color_right_2 fg:color_right_1)\
-$username\
+$memory_usage\
 [](bg:color_right_3 fg:color_right_2)\
 $time\
 [ ](fg:color_right_3)"""
@@ -37,58 +34,33 @@ palette = 'teal_gradient'
 [palettes.teal_gradient]
 color_fg0 = '#ffffff'
 color_fg1 = '#000000'
-# "Deep Sea Space" gradient - Based on #0f2027 → #203a43 → #2c5364
-# Left prompt - smooth 10-step progression
-color_line_1 = '#0f2027'   # git_branch - Deepest dark (darkest)
-color_line_2 = '#152830'   # git_commit/git_state
-color_line_3 = '#1b3139'   # git_status/custom metrics
-color_line_4 = '#203a43'   # directory - Mid dark
-color_line_5 = '#24434b'   # memory_usage
-color_line_6 = '#284c54'   # jobs
-color_line_7 = '#2c5364'   # docker/k8s/aws - Mid point
-# Right prompt - continuation lighter
-color_right_1 = '#35616f'  # os
-color_right_2 = '#3e6f7a'  # username
-color_right_3 = '#477d85'  # time - Lightest
+# "Deep Sea Space" gradient - Option 1: Developer-Focused Layout
+# Left prompt: Directory → Git Branch → Git Status → Git Metrics → Git State/Commit → Jobs
+color_line_1 = '#0f2027'   # directory - Deepest dark (where am I?)
+color_line_2 = '#152830'   # git_branch - Dark (what branch?)
+color_line_3 = '#1b3139'   # git_status - Medium dark (any changes?)
+color_line_4 = '#203a43'   # custom git_metrics - Mid dark (how much?)
+color_line_5 = '#24434b'   # git_state/git_commit - Mid (special state?)
+color_line_6 = '#284c54'   # jobs - Mid light (background tasks?)
+# Right prompt: Docker/K8s/AWS → Memory → Time
+color_right_1 = '#2c5364'  # docker/k8s/aws - Environment context
+color_right_2 = '#35616f'  # memory_usage - System monitoring
+color_right_3 = '#3e6f7a'  # time - Lightest
 # Status colors
 color_green = '#98971a'
 color_red = '#cc241d'
 color_purple = '#b16286'
 
+# OS and Username removed for cleaner layout
+# You know who you are and what OS you're on
 [os]
-disabled = false
-style = "bg:color_right_1 fg:color_fg0"
-format = '[ $symbol]($style)'
-
-[os.symbols]
-Windows = "󰍲"
-Ubuntu = "󰕈"
-SUSE = ""
-Raspbian = "󰐿"
-Mint = "󰣭"
-Macos = "󰀵"
-Manjaro = ""
-Linux = "󰌽"
-Gentoo = "󰣨"
-Fedora = "󰣛"
-Alpine = ""
-Amazon = ""
-Android = ""
-Arch = "󰣇"
-Artix = "󰣇"
-CentOS = ""
-Debian = "󰣚"
-Redhat = "󱄛"
-RedHatEnterprise = "󱄛"
+disabled = true
 
 [username]
-show_always = true
-style_user = "bg:color_right_2 fg:color_fg0"
-style_root = "bg:color_right_2 fg:color_fg0"
-format = '[ $user ]($style)'
+disabled = true
 
 [directory]
-style = "fg:color_fg0 bg:color_line_4"
+style = "fg:color_fg0 bg:color_line_1"
 format = "[ $path ]($style)"
 truncation_length = 0
 truncate_to_repo = false
@@ -97,8 +69,8 @@ truncation_symbol = "…/"
 # Git Branch - Shows current branch with icon (like p10k's vcs-branch)
 [git_branch]
 symbol = ""
-style = "bg:color_line_1"
-format = '[[ $symbol $branch ](fg:color_fg0 bg:color_line_1)]($style)'
+style = "bg:color_line_2"
+format = '[[ $symbol $branch ](fg:color_fg0 bg:color_line_2)]($style)'
 truncation_length = 20
 truncation_symbol = "…"
 ignore_branches = []
@@ -107,15 +79,15 @@ ignore_branches = []
 [git_commit]
 commit_hash_length = 8
 only_detached = true
-style = "bg:color_line_2"
-format = '[[ $hash$tag ](fg:color_fg0 bg:color_line_2)]($style)'
+style = "bg:color_line_5"
+format = '[[ $hash$tag ](fg:color_fg0 bg:color_line_5)]($style)'
 tag_symbol = " 🏷 "
 tag_disabled = false
 
 # Git State - Shows operations like rebase, merge, cherry-pick (like p10k's vcs-action)
 [git_state]
-style = "bg:color_line_2"
-format = '[[ $state( $progress_current/$progress_total) ](fg:color_fg0 bg:color_line_2)]($style)'
+style = "bg:color_line_5"
+format = '[[ $state( $progress_current/$progress_total) ](fg:color_fg0 bg:color_line_5)]($style)'
 rebase = "REBASING"
 merge = "MERGING"
 revert = "REVERTING"
@@ -134,8 +106,8 @@ disabled = true
 [custom.git_metrics_workdir]
 command = """git diff --numstat 2>/dev/null | awk '{added+=$1; deleted+=$2} END {if (added > 0 || deleted > 0) {if (added > 0) printf "\\033[38;2;152;151;26m+%d\\033[39m", added; if (added > 0 && deleted > 0) printf " "; if (deleted > 0) printf "\\033[38;2;204;36;29m-%d\\033[39m", deleted; printf " "}}'"""
 when = "git rev-parse --is-inside-work-tree 2>/dev/null"
-format = "[[$output](fg:color_fg0 bg:color_line_3)]($style)"
-style = "bg:color_line_3"
+format = "[[$output](fg:color_fg0 bg:color_line_4)]($style)"
+style = "bg:color_line_4"
 description = "Show git diff stats for working directory with colors"
 
 # Git Status - Comprehensive status indicators (like p10k's vcs-status)
@@ -172,7 +144,7 @@ format = '[[  $time ](fg:color_fg0 bg:color_right_3)]($style)'
 [memory_usage]
 disabled = false
 threshold = -1
-style = "bg:color_line_5 fg:color_fg0"
+style = "bg:color_right_2 fg:color_fg0"
 format = '[ $ram]($style)'
 
 [jobs]
@@ -182,17 +154,17 @@ format = '[ $number]($style)'
 
 [docker_context]
 disabled = false
-style = "bg:color_line_7 fg:color_fg0"
+style = "bg:color_right_1 fg:color_fg0"
 format = '[ $symbol$context]($style)'
 
 [kubernetes]
 disabled = false
-style = "bg:color_line_7 fg:color_fg0"
+style = "bg:color_right_1 fg:color_fg0"
 format = '[ $symbol$context]($style)'
 
 [aws]
 disabled = false
-style = "bg:color_line_7 fg:color_fg0"
+style = "bg:color_right_1 fg:color_fg0"
 format = '[ $symbol$profile]($style)'
 
 [line_break]
