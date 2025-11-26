@@ -9,7 +9,8 @@ $directory\
 $git_branch\
 $git_commit\
 $git_state\
-$git_metrics\
+${custom.git_metrics_added}\
+${custom.git_metrics_deleted}\
 $git_status\
 [](fg:color_line_3 bg:color_line_4)\
 $memory_usage\
@@ -114,14 +115,29 @@ bisect = "BISECTING"
 am = "AM"
 am_or_rebase = "AM/REBASE"
 
-# Git Metrics - Shows +/- line changes (like p10k's vcs-stashes)
+# Git Metrics - Disabled in favor of custom working directory metrics
+# Built-in git_metrics compares against remote, not working tree
 [git_metrics]
-disabled = false
-added_style = 'bg:color_line_3 fg:color_green bold'
-deleted_style = 'bg:color_line_3 fg:color_red bold'
-format = '[[ +$added]($added_style)[ -$deleted ](bg:color_line_3 fg:color_red bold)]($deleted_style)'
-only_nonzero_diffs = true
-ignore_submodules = false
+disabled = true
+
+# Custom Git Metrics - Shows +/- only for uncommitted changes in working directory
+# Split into two modules to allow different colors for additions (green) and deletions (red)
+
+# Git Metrics - Additions (green)
+[custom.git_metrics_added]
+command = """git diff --numstat 2>/dev/null | awk '{added+=$1} END {if (added > 0) print "+" added}'"""
+when = "git rev-parse --is-inside-work-tree 2>/dev/null"
+format = "[[$output](fg:color_green bg:color_line_3)]($style)"
+style = "bg:color_line_3"
+description = "Show git additions for working directory"
+
+# Git Metrics - Deletions (red)
+[custom.git_metrics_deleted]
+command = """git diff --numstat 2>/dev/null | awk '{deleted+=$2} END {if (deleted > 0) print " -" deleted}'"""
+when = "git rev-parse --is-inside-work-tree 2>/dev/null"
+format = "[[$output ](fg:color_red bg:color_line_3)]($style)"
+style = "bg:color_line_3"
+description = "Show git deletions for working directory"
 
 # Git Status - Comprehensive status indicators (like p10k's vcs-status)
 # This shows working tree status with various symbols
