@@ -20,8 +20,12 @@ $docker_context\
 $kubernetes\
 $aws\
 [](bg:color_line_7 fg:color_line_6)\
+$os\
+[](bg:color_line_8 fg:color_line_7)\
+$username\
+[](bg:color_line_9 fg:color_line_8)\
 $time\
-[](fg:color_line_7)\
+[](fg:color_line_9)\
 $line_break$character"""
 
 right_format = ""
@@ -41,19 +45,47 @@ color_line_3 = '#172b37'   # git section - +3% (17.2%)
 color_line_4 = '#1b2f3f'   # git_metrics - +3% (20.2%)
 color_line_5 = '#1f3447'   # fill - +3% (23.2%)
 color_line_6 = '#23384f'   # docker/k8s/aws - +3% (26.2%)
-color_line_7 = '#273d57'   # time - +3% (29.2% brightness)
+color_line_7 = '#273d57'   # os - +3% (29.2%)
+color_line_8 = '#2b415f'   # username - +3% (32.2%)
+color_line_9 = '#2f4667'   # time - +3% (35.2% brightness)
 # Status colors
 color_green = '#98971a'
 color_red = '#cc241d'
 color_purple = '#b16286'
 
-# OS and Username removed for cleaner layout
-# You know who you are and what OS you're on
+
 [os]
-disabled = true
+disabled = false
+style = "bg:color_line_7"
+format = '[[ $symbol](fg:color_fg0 bg:color_line_7)]($style)'
+
+[os.symbols]
+Windows = "󰍲"
+Ubuntu = "󰕈"
+SUSE = ""
+Raspbian = "󰐿"
+Mint = "󰣭"
+Macos = "󰀵"
+Manjaro = ""
+Linux = "󰌽"
+Gentoo = "󰣨"
+Fedora = "󰣛"
+Alpine = ""
+Amazon = ""
+Android = ""
+Arch = "󰣇"
+Artix = "󰣇"
+CentOS = ""
+Debian = "󰣚"
+Redhat = "󱄛"
+RedHatEnterprise = "󱄛"
 
 [username]
-disabled = true
+disabled = false
+style_user = "bg:color_line_8"
+style_root = "bg:color_line_8"
+format = '[[ $user](fg:color_fg0 bg:color_line_8)]($style)'
+show_always = true
 
 [directory]
 style = "fg:color_fg0 bg:color_line_1"
@@ -134,8 +166,8 @@ disabled = false
 [time]
 disabled = false
 time_format = "%F %T"
-style = "bg:color_line_7"
-format = '[[  $time ](fg:color_fg0 bg:color_line_7)]($style)'
+style = "bg:color_line_9"
+format = '[[  $time ](fg:color_fg0 bg:color_line_9)]($style)'
 
 [memory_usage]
 disabled = false
