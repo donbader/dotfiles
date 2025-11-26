@@ -71,6 +71,31 @@ format = '[[ $symbol $branch ](fg:color_fg0 bg:color_line_1)]($style)'
 
 **Both must use the same color variable!** If they don't match, the gradient will break.
 
+### Special Case: Modules with Multiple Style Fields
+
+Some modules have multiple style fields for different states. For these modules:
+
+**Username module:**
+```toml
+[username]
+style_user = "bg:color_line_8"      # For regular user
+style_root = "bg:color_line_8"       # For root user
+format = '[[ $user](fg:color_fg0 bg:color_line_8)]($style)'
+```
+
+**OS module:**
+```toml
+[os]
+style = "bg:color_line_7"
+format = '[[ $symbol](fg:color_fg0 bg:color_line_7)]($style)'
+```
+
+**Key points:**
+- Use only `bg:color_name` in style fields (no foreground color)
+- Specify both `fg:color_fg0 bg:color_name` in the format field
+- For username, both `style_user` and `style_root` should use the same background color
+- The format field determines the actual colors displayed
+
 ### Foreground vs Background Colors
 
 - `fg:color_name` - Text color
@@ -158,15 +183,14 @@ color_purple = '#b16286' # For special states
 
 Decide which module gets which color. Current mapping (single-line layout):
 - `color_line_1` → directory
-- `color_line_2` → git_branch
-- `color_line_3` → git_status
+- `color_line_2` → jobs
+- `color_line_3` → git_branch, git_status, git_state, git_commit (unified git section)
 - `color_line_4` → custom.git_metrics_workdir
-- `color_line_5` → git_state, git_commit
-- `color_line_6` → jobs
-- `color_fill` → fill (space between left and right)
-- `color_right_1` → docker_context, kubernetes, aws
-- `color_right_2` → memory_usage
-- `color_right_3` → time
+- `color_line_5` → fill (space between left and right)
+- `color_line_6` → docker_context, kubernetes, aws
+- `color_line_7` → os
+- `color_line_8` → username
+- `color_line_9` → time
 
 ### Step 5: Update Module Configurations
 
@@ -374,7 +398,48 @@ Check [Starship documentation](https://starship.rs/config/) for module-specific 
    format = "[[ $symbol ](fg:color_fg0 bg:color_line_8)]($style)"
    ```
 
-### Task 7: Create a Single-Line Layout with Fill
+### Task 7: Add OS and Username Modules
+
+To add OS and username information to your prompt:
+
+1. **Add colors to palette:**
+   ```toml
+   color_line_7 = '#273d57'   # os
+   color_line_8 = '#2b415f'   # username
+   color_line_9 = '#2f4667'   # time (if shifting existing modules)
+   ```
+
+2. **Add to format string** (before time):
+   ```toml
+   [](bg:color_line_7 fg:color_line_6)\
+   $os\
+   [](bg:color_line_8 fg:color_line_7)\
+   $username\
+   [](bg:color_line_9 fg:color_line_8)\
+   $time\
+   ```
+
+3. **Configure OS module:**
+   ```toml
+   [os]
+   disabled = false
+   style = "bg:color_line_7"
+   format = '[[ $symbol](fg:color_fg0 bg:color_line_7)]($style)'
+   ```
+
+4. **Configure username module** (note: uses `style_user` and `style_root`):
+   ```toml
+   [username]
+   disabled = false
+   style_user = "bg:color_line_8"
+   style_root = "bg:color_line_8"
+   format = '[[ $user](fg:color_fg0 bg:color_line_8)]($style)'
+   show_always = true
+   ```
+
+**Important:** The username module requires `style_user` and `style_root` instead of just `style`. Both should use the same background color for consistent gradient.
+
+### Task 8: Create a Single-Line Layout with Fill
 
 To put everything on one line with right-aligned content:
 
@@ -464,6 +529,29 @@ printf "\\033[31mRed\\033[39m"
 3. For custom modules: Does `when` condition pass?
 4. For custom modules: Does `command` produce output?
 5. Test command manually in terminal
+
+### Problem: "Unknown key" Error for Username Module
+
+**Symptom:** Error message: `Error in 'Username' at 'style': Unknown key (Did you mean 'style_user'?)`
+
+**Solution:** The username module uses special style fields:
+```toml
+# WRONG
+[username]
+style = "bg:color_line_8 fg:color_fg0"
+
+# CORRECT
+[username]
+style_user = "bg:color_line_8"
+style_root = "bg:color_line_8"
+format = '[[ $user](fg:color_fg0 bg:color_line_8)]($style)'
+```
+
+**Key points:**
+- Use `style_user` for regular users
+- Use `style_root` for root user
+- Don't specify foreground color in style fields, only in format
+- Both style fields should use the same background for consistent gradient
 
 ---
 

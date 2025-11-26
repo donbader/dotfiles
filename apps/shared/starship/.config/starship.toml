@@ -35,19 +35,19 @@ palette = 'teal_gradient'
 [palettes.teal_gradient]
 color_fg0 = '#ffffff'
 color_fg1 = '#000000'
-# "Deep Sea Space" gradient - Smooth 7-step progression with 3% brightness increments
-# Single-line layout: directory → jobs → [git section] → git_metrics → fill → cloud → time
+# Dark Blue to Teal gradient - Smooth 9-step progression
+# Single-line layout: directory → jobs → [git section] → git_metrics → fill → cloud → os → username → time
 # Git components (branch/status/state/commit) share same color for unified visual section
-# Balanced gradient with 3% brightness steps
-color_line_1 = '#0f2027'   # directory - 11.2% brightness
-color_line_2 = '#13262f'   # jobs - +3% (14.2%)
-color_line_3 = '#172b37'   # git section - +3% (17.2%)
-color_line_4 = '#1b2f3f'   # git_metrics - +3% (20.2%)
-color_line_5 = '#1f3447'   # fill - +3% (23.2%)
-color_line_6 = '#23384f'   # docker/k8s/aws - +3% (26.2%)
-color_line_7 = '#273d57'   # os - +3% (29.2%)
-color_line_8 = '#2b415f'   # username - +3% (32.2%)
-color_line_9 = '#2f4667'   # time - +3% (35.2% brightness)
+# Gradient from dark blue-grey (#16222A) to steel teal (#3A6073)
+color_line_1 = '#16222a'   # directory - 12.3% brightness
+color_line_2 = '#1a2933'   # jobs - 14.8% brightness
+color_line_3 = '#1f313c'   # git section - 17.6% brightness
+color_line_4 = '#233945'   # git_metrics - 20.3% brightness
+color_line_5 = '#28414e'   # fill - 23.1% brightness
+color_line_6 = '#2c4857'   # docker/k8s/aws - 25.6% brightness
+color_line_7 = '#315060'   # os - 28.5% brightness
+color_line_8 = '#355869'   # username - 31.2% brightness
+color_line_9 = '#3a6073'   # time - 34.0% brightness
 # Status colors
 color_green = '#98971a'
 color_red = '#cc241d'
