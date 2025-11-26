@@ -19,17 +19,32 @@ Perform thorough, educational code reviews that help developers learn and improv
 
 **Priority**: Explicit PR URL takes precedence over auto-detection.
 
-### Re-Review Mode
+### Review Modes
 
-When previous OpenCode review comments exist, automatically switches to re-review mode:
+The command intelligently detects the appropriate review mode:
+
+**First Review** - No previous OpenCode reviews exist:
+- Review entire PR diff
+- Post comprehensive review with inline comments
+- Present review to user for approval before posting
+
+**Re-Review** - Unresolved threads exist:
 - Fetches all review threads using GraphQL to check resolution status
 - **CRITICAL**: Only verifies unresolved threads (`isResolved: false`)
 - **IMPORTANT**: Threads with author replies are NOT automatically resolved - must check `isResolved` status
 - For each unresolved thread: Verifies fix, replies in-thread, marks resolved if addressed
-- Reviews new/changed code for additional issues
+- Reviews new commits since last review for additional issues
 - Posts in-thread comments only (never standalone)
 - Posts verification summary comment when all concerns addressed
-- **Never directly approves** - leaves approval decision to the reviewer
+
+**Incremental Review** - All previous threads resolved, new commits exist:
+- Detects new commits since last OpenCode review
+- **Only reviews the delta** (changes since last review commit)
+- More focused - only comment on critical issues in new code
+- Avoids redundant review of already-approved code
+- If no new commits: exits early indicating PR is ready for merge
+
+**All modes**: Never directly approve - always leave approval decision to the human reviewer
 
 ## Workflow Overview
 
@@ -41,20 +56,30 @@ When previous OpenCode review comments exist, automatically switches to re-revie
 5. **Post**: Submit review to GitHub as single request with inline comments
 6. **Cleanup**: Remove worktree if created
 
-### Re-Review (Autonomous Verification)
+### Re-Review (Unresolved Threads)
 1. **Detect**: Identify previous OpenCode review threads using GraphQL
 2. **Filter**: Extract ONLY unresolved threads (`isResolved: false`) - skip already resolved ones
 3. **Verify**: For each unresolved thread, check if issue is fixed
 4. **Reply**: Post in-thread verification (resolved/not resolved)
 5. **Mark**: Resolve threads that are fixed using GraphQL API
-6. **Scan**: Review new/changed code for additional issues
+6. **Scan**: Review new commits since last review for additional issues
 7. **Summarize**: Post verification summary if all concerns addressed
 8. **Cleanup**: Remove worktree if created
 
-**Key distinction**:
+### Incremental Review (All Resolved, New Commits)
+1. **Detect**: All previous threads resolved, check for new commits
+2. **Compare**: Get last review commit vs current HEAD
+3. **Early Exit**: If no new commits, report PR ready for merge
+4. **Delta Review**: If new commits exist, review only changes since last review
+5. **Focus**: More lenient - only critical issues in new code
+6. **Post**: Submit focused review on new changes only
+7. **Cleanup**: Remove worktree if created
+
+**Key distinctions**:
 - ❌ **Skip**: Thread is marked as resolved (`isResolved: true`) - already verified
 - ✅ **Verify**: Thread is unresolved (`isResolved: false`) - needs verification, even if it has author replies
 - 💡 **Important**: Author replies do NOT automatically resolve threads - always check `isResolved` status
+- 📝 **Incremental**: Only review commits added since last OpenCode review
 
 **Verification summary criteria**: 
 - ✅ All previous issues verified fixed and resolved
@@ -125,6 +150,30 @@ This prevents commenting on intentional decisions or asking already-answered que
 
 "Using polling due to firewall restrictions"
 → Don't suggest webhooks as alternative
+```
+
+### 3. Incremental Review Strategy
+
+For PRs with all previous issues resolved and new commits:
+
+**Scope discipline**:
+- Review ONLY code in commits since last OpenCode review
+- Use `git diff ${last_review_commit}..HEAD` to determine scope
+- Do NOT re-comment on previously reviewed and approved code
+- Focus on critical issues in new changes
+
+**Benefits**:
+- Faster feedback cycle for iterative development
+- Avoids review fatigue from repeated comments
+- Respects already-approved architectural decisions
+- Encourages incremental improvements
+
+**Example**:
+```
+Last review: commit abc123 (3 days ago)
+Current HEAD: commit xyz789 (now)
+Incremental scope: Only review changes in commits def456, ghi789, xyz789
+Skip: All code unchanged from abc123
 ```
 
 ## Workflow
@@ -282,35 +331,143 @@ fi
 
 ### Phase 2: Fetch PR Information
 
-Single bash command to fetch all required data:
+**Single bash command** to fetch all required data:
 
 ```bash
 # Get repository info for API calls
 repo_info=$(gh repo view --json owner,name -q '.owner.login + "/" + .name')
+owner=$(echo "$repo_info" | cut -d'/' -f1)
+repo=$(echo "$repo_info" | cut -d'/' -f2)
 
-# Fetch all PR information in one command
+# Fetch all PR information in one go
 echo "=== PR_NUMBER ===" && echo "$pr_number" && \
 echo "=== BASE_BRANCH ===" && echo "$base_branch" && \
 echo "=== PR_METADATA ===" && gh pr view $pr_number --json title,body,author,url && \
 echo "=== FILES_CHANGED ===" && gh pr view $pr_number --json files -q '.files[] | "\(.path) (+\(.additions)/-\(.deletions))"' && \
-echo "=== REVIEW_THREADS ===" && gh api "repos/${repo_info}/pulls/${pr_number}/comments" --jq '[.[] | select(.body | contains("🤖 Generated by OpenCode") or .body | contains("🤖 Re-verified by OpenCode")) | {id, path, line, created_at, body, in_reply_to_id}]' && \
+echo "=== REVIEW_THREADS_AND_HISTORY ===" && gh api graphql -f query='
+  query($owner: String!, $repo: String!, $pr: Int!) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $pr) {
+        reviewThreads(first: 100) {
+          nodes {
+            id
+            isResolved
+            comments(first: 10) {
+              nodes {
+                databaseId
+                author { login }
+                body
+                path
+                line
+              }
+            }
+          }
+        }
+        reviews(last: 100, states: COMMENTED) {
+          nodes {
+            body
+            commit { oid }
+            createdAt
+          }
+        }
+      }
+    }
+  }' -f owner="$owner" -f repo="$repo" -F pr=$pr_number && \
+echo "=== CURRENT_COMMIT ===" && git rev-parse HEAD && \
 echo "=== PR_DIFF ===" && gh pr diff $pr_number
 ```
 
 **Key points**:
-- Worktree created from `origin/$branch` ensures latest state
+- Worktree created from `origin/$branch` (not local branch) to ensure latest state
 - Single chained command for efficiency
-- Captures PR description and base branch for context
-- Fetches all review threads for re-review detection
+- Captures PR description AND base branch for context
+- **Fetches review threads with resolution status** using GraphQL for re-review detection
+- **Fetches review history with commit SHAs** for incremental review detection
+- **Captures current commit** to compare against last review
 - Uses correct repo info format for API calls
 
 ### Phase 3: Analyze PR Context
 
-**Check for re-review mode**:
-- Use GraphQL to fetch review threads with resolution status
-- Count unresolved (`isResolved: false`) OpenCode threads
-- If 0 unresolved: First review OR all previous issues resolved - proceed with normal review
-- If 1+ unresolved: Re-review mode - autonomous execution to verify fixes
+**Determine review mode**:
+
+```bash
+# Parse GraphQL response to count thread statuses
+unresolved_count=$(echo "$thread_data" | jq '[.data.repository.pullRequest.reviewThreads.nodes[] | 
+  select(.isResolved == false) | 
+  select(.comments.nodes[0].body | contains("🤖 Generated by OpenCode"))] | length')
+
+resolved_count=$(echo "$thread_data" | jq '[.data.repository.pullRequest.reviewThreads.nodes[] | 
+  select(.isResolved == true) | 
+  select(.comments.nodes[0].body | contains("🤖 Generated by OpenCode"))] | length')
+
+total_previous_reviews=$((unresolved_count + resolved_count))
+
+# Determine review mode based on state
+if [ "$total_previous_reviews" -eq 0 ]; then
+  echo "=== MODE: FIRST REVIEW ==="
+  review_mode="first"
+  diff_range="${base_branch}..HEAD"
+  
+elif [ "$unresolved_count" -gt 0 ]; then
+  echo "=== MODE: RE-REVIEW (${unresolved_count} unresolved threads) ==="
+  review_mode="re-review"
+  
+  # Get last review commit for new changes detection
+  last_review_commit=$(echo "$review_history" | jq -r '
+    .data.repository.pullRequest.reviews.nodes[] | 
+    select(.body | contains("🤖 Generated by OpenCode") or contains("🤖 Re-reviewed by OpenCode")) | 
+    .commit.oid' | head -1)
+  
+  if [ -n "$last_review_commit" ]; then
+    diff_range="${last_review_commit}..HEAD"
+    echo "Will also review new commits since last review: $last_review_commit"
+  else
+    diff_range="${base_branch}..HEAD"
+  fi
+  
+elif [ "$resolved_count" -gt 0 ] && [ "$unresolved_count" -eq 0 ]; then
+  echo "=== MODE: INCREMENTAL REVIEW (All ${resolved_count} previous threads resolved) ==="
+  review_mode="incremental"
+  
+  # Get last review commit
+  last_review_commit=$(echo "$review_history" | jq -r '
+    .data.repository.pullRequest.reviews.nodes[] | 
+    select(.body | contains("🤖 Generated by OpenCode") or contains("🤖 Re-reviewed by OpenCode")) | 
+    .commit.oid' | head -1)
+  
+  current_commit=$(git rev-parse HEAD)
+  
+  if [ -z "$last_review_commit" ]; then
+    echo "⚠️  Could not find last review commit - falling back to full review"
+    review_mode="first"
+    diff_range="${base_branch}..HEAD"
+    
+  elif [ "$last_review_commit" = "$current_commit" ]; then
+    echo "✅ No new changes since last review - PR ready for merge"
+    echo ""
+    echo "All previous issues resolved and no new commits added."
+    echo "The PR is ready for human approval and merge."
+    exit 0
+    
+  else
+    echo "📝 New commits detected - reviewing incremental changes only"
+    diff_range="${last_review_commit}..HEAD"
+    
+    # Show what's new
+    new_commits=$(git log --oneline "$last_review_commit".."$current_commit")
+    commit_count=$(echo "$new_commits" | wc -l | tr -d ' ')
+    
+    echo ""
+    echo "New commits since last review ($commit_count):"
+    echo "$new_commits"
+    
+    files_changed=$(git diff --name-only "$last_review_commit".."$current_commit")
+    echo ""
+    echo "Files changed since last review:"
+    echo "$files_changed"
+  fi
+fi
+```
 
 **CRITICAL**: Do NOT rely on comment replies to determine resolution status
 - Threads with author replies may still be unresolved (`isResolved: false`)
@@ -326,6 +483,24 @@ echo "=== PR_DIFF ===" && gh pr diff $pr_number
 ### Phase 4: Analyze Code
 
 Analyze code directly. Use Task tool only when searching patterns across many files.
+
+**Review scope based on mode**:
+
+**First Review** - Review entire PR:
+- Use diff range: `${base_branch}..HEAD`
+- Comprehensive review of all changes
+- Present to user before posting
+
+**Re-Review** - Verify unresolved threads + review new commits:
+- First verify each unresolved thread (see verification logic below)
+- Then review new commits: `${last_review_commit}..HEAD`
+- Focus on unresolved issues and new changes
+
+**Incremental Review** - Review only new commits:
+- Use diff range: `${last_review_commit}..HEAD`
+- More lenient - focus on critical issues only
+- Skip verification (all previous threads already resolved)
+- Smaller scope = faster review
 
 **Priority categories**:
 
@@ -400,6 +575,7 @@ threads_with_replies=$(gh api "repos/${repo}/pulls/${pr}/comments" | \
 **Comment limits**:
 - First review: Max 7-10 meaningful comments
 - Re-review: Max 3 comments, only for NEW critical issues OR verification
+- Incremental review: Max 5 comments, focus on critical issues in new code only
 
 **Re-review filter** - For each potential issue, ask:
 
@@ -416,6 +592,21 @@ threads_with_replies=$(gh api "repos/${repo}/pulls/${pr}/comments" | \
    - YES → DO NOT comment - verify as RESOLVED and mark thread resolved
    - NO → Code got worse - comment
 
+**Incremental review filter** - For each potential issue, ask:
+
+1. **Is this code in the new commits** (since last review)?
+   - Use `git diff ${last_review_commit}..HEAD` to check scope
+   - NO → Skip (already reviewed and approved)
+   - YES → Proceed to next check
+
+2. **Is this a critical issue** (security/bugs/breaking changes)?
+   - YES → Comment
+   - NO → Consider skipping (be lenient on incremental reviews)
+
+3. **Does this violate an established pattern** in the codebase?
+   - YES and critical → Comment
+   - Minor style/preference → Skip
+
 **Example**:
 ```
 Previous: "🚨 Deadlock from RLock→Lock→RLock upgrade"
@@ -424,19 +615,22 @@ Decision: DO NOT comment on performance - RESOLVE instead
 ```
 
 **Scope filters**:
-- Is this code in the diff?
+- Is this code in the diff (or new commits for incremental)?
 - Within PR's stated purpose?
 - Already addressed in PR description?
 - Pre-existing issue unrelated to changes?
 - **[Re-review]** Is this a fix for previous comment? Better than before?
+- **[Incremental]** Is this in code added since last review?
 
 **Comment guidelines**:
 - **Security & Bugs** 🚨: 
   - First review: Always comment on new bugs
   - Re-review: Only if fix introduced new bug OR didn't fix original
+  - Incremental: Always comment on new bugs in new code
 - **Performance** ⚠️: 
   - First review: Only significant impact (>20%, quantify)
   - Re-review: NEVER if it fixes correctness/security bug
+  - Incremental: Only if critical performance regression
 - **Architecture** ⚠️: Only if violates established patterns
 - **Testing** 💡: If new functionality lacks tests
 - **Readability** 💡: Only truly confusing code
@@ -935,7 +1129,7 @@ View: [PR_URL]
 Verification results for PR #[NUMBER]:
 - ✅ Resolved: [X] comments (marked as resolved)
 - ⚠️ Still open: [Y] comments (need more work)
-- 🆕 New issues: [Z] comments
+- 🆕 New issues: [Z] comments in new commits
 
 Outstanding work before merge:
 - [List of items that still need attention]
@@ -945,7 +1139,7 @@ View: [PR_URL]
 
 **Re-Review (all satisfied - GitHub Approved)**:
 ```
-✅ Re-Review Complete - APPROVED 🎉
+✅ Re-Review Complete - All Concerns Addressed
 
 Re-review results for PR #[NUMBER]:
 - ✅ All [X] previous threads verified and resolved
@@ -953,7 +1147,40 @@ Re-review results for PR #[NUMBER]:
 - ✅ Code quality improved
 
 All review feedback has been satisfactorily implemented.
-GitHub PR has been APPROVED - ready to merge.
+Posted verification summary - ready for human approval.
+
+View: [PR_URL]
+```
+
+**Incremental Review (no new commits)**:
+```
+✅ No Review Needed - PR Ready for Merge
+
+PR #[NUMBER] status:
+- ✅ All [X] previous issues resolved
+- ✅ No new commits since last review
+- ✅ Code unchanged from approved state
+
+The PR is ready for human approval and merge.
+
+View: [PR_URL]
+```
+
+**Incremental Review (new commits reviewed)**:
+```
+✅ Incremental review posted successfully!
+
+Reviewed [X] new commits since last review:
+- 📝 [commit messages]
+
+Results for PR #[NUMBER]:
+- ✅ Previous issues: All [X] resolved
+- 📝 New commits: [Y] commits reviewed
+- 🚨 New issues: [Z] critical issues found
+- ⚠️ New improvements: [W] suggestions
+
+Files changed since last review:
+- [file list with +/- counts]
 
 View: [PR_URL]
 ```
@@ -1197,15 +1424,25 @@ A successful review meets these requirements:
 - ✅ Feels like learning from an experienced developer
 
 ### Re-Review
-- ✅ Fetches all review threads autonomously
+- ✅ Fetches all review threads autonomously using GraphQL
+- ✅ Filters to ONLY unresolved threads (`isResolved: false`)
 - ✅ For each unresolved thread: Verifies, replies in-thread, marks resolved if fixed
-- ✅ Reviews new/changed code and posts in-thread comments for new issues
+- ✅ Reviews new commits since last review and posts in-thread comments for new issues
 - ✅ Uses GraphQL to mark threads as resolved programmatically
 - ✅ Posts verification summary when all concerns addressed (ready for human approval)
 - ✅ Executes autonomously - no user approval needed for individual verification actions
 - ✅ NEVER directly approves - always leaves approval to human reviewer
 
-### Merge Readiness (for re-reviews)
+### Incremental Review
+- ✅ Detects new commits since last OpenCode review
+- ✅ Exits early if no new commits (reports PR ready for merge)
+- ✅ Reviews ONLY the delta (commits since last review)
+- ✅ More lenient - focuses on critical issues in new code only
+- ✅ Avoids redundant review of already-approved code
+- ✅ Provides clear summary of what was reviewed incrementally
+- ✅ NEVER directly approves - always leaves approval to human reviewer
+
+### Merge Readiness (for re-reviews and incremental reviews)
 - ✅ ALL critical (🚨) issues verified fixed and threads resolved
 - ✅ ALL important (⚠️) issues verified fixed and threads resolved
 - ✅ NO new issues found in recent changes
