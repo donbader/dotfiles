@@ -28,6 +28,7 @@ $username\
 $time\
 [](fg:color_line_11)\
 $line_break\
+${custom.flox}\
 $git_branch\
 $git_status\
 $git_state\
@@ -146,6 +147,14 @@ when = "git rev-parse --is-inside-work-tree 2>/dev/null"
 format = "[$output]($style)"
 style = "fg:color_fg0"
 description = "Show git diff stats for working directory with colors"
+
+# Custom Flox Environment - Shows active flox environment name
+[custom.flox]
+command = """echo $FLOX_ENV_DESCRIPTION 2>/dev/null || echo $FLOX_ENV 2>/dev/null | sed 's|.*/||'"""
+when = "[ -n \"$FLOX_ENV\" ]"
+format = "[flox [$output](fg:color_purple)]($style)"
+style = "fg:color_fg0"
+description = "Show active flox environment"
 
 # Git Status - Comprehensive status indicators (like p10k's vcs-status)
 # This shows working tree status with various symbols
