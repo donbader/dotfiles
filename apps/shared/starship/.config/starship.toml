@@ -4,23 +4,24 @@ format = """
 [](color_line_1)\
 $sudo\
 $directory\
-[](bg:color_line_2)\
+[](bg:color_line_2 fg:color_line_1)\
 $jobs\
-[](bg:color_line_3)\
+[](bg:color_line_3 fg:color_line_2)\
 $git_branch\
 $git_status\
 $git_state\
 $git_commit\
-[](bg:color_line_4)\
+[](bg:color_line_4 fg:color_line_3)\
 ${custom.git_metrics_workdir}\
-[](bg:color_line_5)\
+[](bg:color_line_5 fg:color_line_4)\
 $fill\
-[](bg:color_line_6)\
+[](bg:color_line_6 fg:color_line_5)\
 $docker_context\
 $kubernetes\
 $aws\
-[](bg:color_line_7)\
+[](bg:color_line_7 fg:color_line_6)\
 $time\
+[](fg:color_line_7)\
 $line_break$character"""
 
 right_format = ""
@@ -30,16 +31,17 @@ palette = 'teal_gradient'
 [palettes.teal_gradient]
 color_fg0 = '#ffffff'
 color_fg1 = '#000000'
-# "Deep Sea Space" gradient - Smooth 7-step progression
+# "Deep Sea Space" gradient - Smooth 7-step progression with 3% brightness increments
 # Single-line layout: directory → jobs → [git section] → git_metrics → fill → cloud → time
 # Git components (branch/status/state/commit) share same color for unified visual section
-color_line_1 = '#0f2027'   # directory
-color_line_2 = '#162a32'   # jobs
-color_line_3 = '#1d353e'   # git section (branch, status, state, commit)
-color_line_4 = '#24404a'   # git_metrics
-color_line_5 = '#2b4a55'   # fill
-color_line_6 = '#335561'   # docker/k8s/aws
-color_line_7 = '#3a606d'   # time
+# Balanced gradient with 3% brightness steps
+color_line_1 = '#0f2027'   # directory - 11.2% brightness
+color_line_2 = '#13262f'   # jobs - +3% (14.2%)
+color_line_3 = '#172b37'   # git section - +3% (17.2%)
+color_line_4 = '#1b2f3f'   # git_metrics - +3% (20.2%)
+color_line_5 = '#1f3447'   # fill - +3% (23.2%)
+color_line_6 = '#23384f'   # docker/k8s/aws - +3% (26.2%)
+color_line_7 = '#273d57'   # time - +3% (29.2% brightness)
 # Status colors
 color_green = '#98971a'
 color_red = '#cc241d'
