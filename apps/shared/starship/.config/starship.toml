@@ -107,11 +107,9 @@ truncation_symbol = "…/"
 
 # Git Branch - Shows current branch with icon (like p10k's vcs-branch)
 [git_branch]
-symbol = ""
+symbol = ""
 style = "fg:color_fg0"
 format = '[ $symbol $branch ]($style)'
-truncation_length = 20
-truncation_symbol = "…"
 ignore_branches = []
 
 # Git Commit - Shows commit hash when in detached HEAD (like p10k's vcs-commit)
