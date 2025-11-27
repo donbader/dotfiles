@@ -73,10 +73,10 @@ main() {
     echo "Selected directory: $remote_dir" >&2
 
     # Step 3: Open in VS Code
-    vscode_uri="vscode-remote://ssh-remote+${ssh_host}${remote_dir}"
-    echo "Opening VS Code with URI: $vscode_uri" >&2
+    # Use code command with remote SSH extension
+    echo "Opening VS Code for $ssh_host:$remote_dir" >&2
 
-    code --folder-uri "$vscode_uri"
+    code --remote "ssh-remote+${ssh_host}" "$remote_dir"
 }
 
 main "$@"
