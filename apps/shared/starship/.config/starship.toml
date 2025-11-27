@@ -1,6 +1,13 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 
 format = """
+${custom.flox}\
+$git_branch\
+$git_status\
+$git_state\
+$git_commit\
+${custom.git_metrics_workdir}\
+$line_break\
 [](color_line_1)\
 $sudo\
 $directory\
@@ -36,13 +43,6 @@ $username\
 [](bg:color_line_15 fg:color_line_14)\
 $time\
 [](fg:color_line_15)\
-$line_break\
-${custom.flox}\
-$git_branch\
-$git_status\
-$git_state\
-$git_commit\
-${custom.git_metrics_workdir}\
 $line_break\
 $character"""
 
