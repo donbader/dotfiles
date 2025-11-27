@@ -4,4 +4,45 @@
   "theme": "gruvbox",
   "model": "github-copilot/claude-sonnet-4.5",
   "autoupdate": true,
+  "mcp": {
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "enabled": true
+    },
+    "playwright": {
+      "type": "local",
+      "command": [
+        "npx",
+        "@playwright/mcp@v0.0.48"
+      ],
+      "enabled": true
+    },
+    "tavily": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "tavily-mcp@0.1.2"
+      ],
+      "environment": {
+        "TAVILY_API_KEY": "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"
+      },
+      "enabled": true,
+    },
+    "shadcn": {
+      "type": "remote",
+      "url": "https://mcp.shadcn.com/mcp",
+      "enabled": true
+    },
+    "chrome-devtools": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "chrome-devtools-mcp@latest"
+      ],
+      "enabled": true
+    }
+  }
 }
