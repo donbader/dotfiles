@@ -34,7 +34,7 @@ const fs = require('fs');
 // Configuration
 const KEYCHAIN_SERVICE_PREFIX = 'otp-manager';
 const KEYCHAIN_AUTH_PREFIX = 'otp-manager-auth';
-const AUTH_TIMEOUT = 24 * 60 * 60; // 24 hours in seconds
+const AUTH_TIMEOUT = 30; // 24 hours in seconds
 
 /**
  * Store authentication timestamp in keychain
@@ -47,7 +47,7 @@ function storeAuthTimestamp() {
         } catch (e) {}
         
         const timestamp = Date.now();
-        execSync(`security add-generic-password -s "${KEYCHAIN_AUTH_PREFIX}" -a "timestamp" -w "${timestamp}" -A`, {
+        execSync(`security add-generic-password -s "${KEYCHAIN_AUTH_PREFIX}" -a "timestamp" -w "${timestamp}"`, {
             stdio: 'pipe'
         });
     } catch (error) {
@@ -188,11 +188,22 @@ async function authenticate() {
     try {
         const password = await getPassword();
         
-        // Verify password by trying to unlock the keychain
+        // Verify password by trying to unlock the keychain and set partition list
+        // This allows the trusted apps to access without prompts
         try {
+            // First unlock the keychain
             execSync(`security unlock-keychain -p "${password.replace(/"/g, '\\"')}"`, {
                 stdio: 'pipe'
             });
+            
+            // Set partition list for auth timestamp to allow access without prompts
+            try {
+                execSync(`security set-generic-password-partition-list -s "${KEYCHAIN_AUTH_PREFIX}" -a "timestamp" -k "${password.replace(/"/g, '\\"')}" 2>/dev/null`, {
+                    stdio: 'pipe'
+                });
+            } catch (e) {
+                // Ignore if item doesn't exist yet
+            }
             
             // Password correct, store auth timestamp
             storeAuthTimestamp();
@@ -222,8 +233,8 @@ function storeSecret(name, secret) {
         } catch (e) {}
         
         // Add secret to keychain
-        // -A allows all applications to access this item without prompting
-        execSync(`security add-generic-password -s "${KEYCHAIN_SERVICE_PREFIX}" -a "${name}" -w "${secret}" -A`, {
+        // Access control will be set via set-generic-password-partition-list
+        execSync(`security add-generic-password -s "${KEYCHAIN_SERVICE_PREFIX}" -a "${name}" -w "${secret}"`, {
             stdio: 'pipe'
         });
     } catch (error) {
@@ -236,6 +247,8 @@ function storeSecret(name, secret) {
  */
 function getSecret(name) {
     try {
+        // After set-generic-password-partition-list is called during authentication,
+        // we can access items without prompts
         const result = execSync(`security find-generic-password -s "${KEYCHAIN_SERVICE_PREFIX}" -a "${name}" -w 2>/dev/null`, {
             encoding: 'utf8',
             stdio: 'pipe'
@@ -372,11 +385,37 @@ async function addSecret(name, secret) {
         const cleanSecret = secret.replace(/\s/g, '').toUpperCase();
         generateTOTP(cleanSecret); // Will throw if invalid
         
+        // Get password to authorize the partition list update
+        const password = await getPassword('Enter keychain password to save secret: ');
+        
+        // Verify password first
+        try {
+            execSync(`security unlock-keychain -p "${password.replace(/"/g, '\\"')}"`, {
+                stdio: 'pipe'
+            });
+        } catch (error) {
+            console.error('Incorrect password');
+            return false;
+        }
+        
+        // Store the secret
         storeSecret(name, cleanSecret);
+        
+        // Set partition list to allow access without prompts going forward
+        try {
+            execSync(`security set-generic-password-partition-list -s "${KEYCHAIN_SERVICE_PREFIX}" -a "${name}" -k "${password.replace(/"/g, '\\"')}" 2>/dev/null`, {
+                stdio: 'pipe'
+            });
+        } catch (e) {
+            // Continue even if this fails
+        }
         
         console.log(`✓ Secret for '${name}' saved successfully to Keychain`);
         return true;
     } catch (error) {
+        if (error.message === 'Cancelled') {
+            throw error;
+        }
         console.error(`Error: ${error.message}`);
         return false;
     }
