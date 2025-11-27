@@ -1,650 +1,145 @@
 # Starship Prompt Customization Guide
 
-This guide explains how to customize the Starship prompt configuration, including modifying colors, adding custom modules, and understanding the gradient system.
+Quick guide for customizing your Starship prompt gradient and layout.
 
-## Table of Contents
-1. [Understanding the Configuration Structure](#understanding-the-configuration-structure)
-2. [How Colors Work](#how-colors-work)
-3. [Modifying the Gradient](#modifying-the-gradient)
-4. [Adding/Modifying Custom Modules](#addingmodifying-custom-modules)
-5. [Common Customization Tasks](#common-customization-tasks)
+## Quick Start: Change Gradient Colors
 
----
+### 1. Find a Gradient
+Visit [uigradients.com](https://uigradients.com) and copy the CSS gradient colors.
 
-## Understanding the Configuration Structure
-
-The Starship configuration has three main sections:
-
-### 1. Format String (Layout)
-```toml
-format = """
-[](color_line_1)\
-$sudo\
-$git_branch\
-[](bg:color_line_2 fg:color_line_1)\
-$git_commit\
-...
-"""
-```
-
-**Key concepts:**
-- `$module_name` - Inserts a module (e.g., `$git_branch`, `$directory`)
-- `${custom.name}` - Inserts a custom module (requires curly braces for dotted names)
-- `[](bg:color_x fg:color_y)` - Powerline separator (changes background from color_y to color_x)
-- Backslash `\` at end of line continues to next line
-- Order in format string = order modules appear in prompt
-
-### 2. Palette (Color Definitions)
-```toml
-[palettes.teal_gradient]
-color_line_1 = '#0f2027'
-color_line_2 = '#152830'
-...
-```
-
-### 3. Module Configurations
-```toml
-[git_branch]
-symbol = ""
-style = "bg:color_line_1"
-format = '[[ $symbol $branch ](fg:color_fg0 bg:color_line_1)]($style)'
-```
-
----
-
-## How Colors Work
-
-### Color Assignment Rules
-
-**CRITICAL: Each module must specify its background color in TWO places:**
-
-1. **In the module's `style` field:**
-   ```toml
-   [git_branch]
-   style = "bg:color_line_1"
-   ```
-
-2. **In the module's `format` field:**
-   ```toml
-   format = '[[ $symbol $branch ](fg:color_fg0 bg:color_line_1)]($style)'
-   ```
-
-**Both must use the same color variable!** If they don't match, the gradient will break.
-
-### Special Case: Modules with Multiple Style Fields
-
-Some modules have multiple style fields for different states. For these modules:
-
-**Username module:**
-```toml
-[username]
-style_user = "bg:color_line_8"      # For regular user
-style_root = "bg:color_line_8"       # For root user
-format = '[[ $user](fg:color_fg0 bg:color_line_8)]($style)'
-```
-
-**OS module:**
-```toml
-[os]
-style = "bg:color_line_7"
-format = '[[ $symbol](fg:color_fg0 bg:color_line_7)]($style)'
-```
-
-**Key points:**
-- Use only `bg:color_name` in style fields (no foreground color)
-- Specify both `fg:color_fg0 bg:color_name` in the format field
-- For username, both `style_user` and `style_root` should use the same background color
-- The format field determines the actual colors displayed
-
-### Foreground vs Background Colors
-
-- `fg:color_name` - Text color
-- `bg:color_name` - Background color
-- `color_fg0 = '#ffffff'` - Usually white text
-- `color_fg1 = '#000000'` - Usually black text
-
-### Powerline Separators
-
-The  character creates smooth transitions between sections:
-```toml
-[](bg:color_line_2 fg:color_line_1)
-```
-This means:
-- Current section background = `color_line_2`
-- Previous section background = `color_line_1`
-- The  will be colored `color_line_1` and sit on `color_line_2` background
-
-**Rule:** Always put separator BEFORE the module that uses the new color.
-
----
-
-## Modifying the Gradient
-
-### Step 1: Choose Your Base Colors
-
-Find a gradient you like (e.g., from [uigradients.com](https://uigradients.com)) and note the hex colors.
-
-Example: "Deep Sea Space" gradient
+Example:
 ```css
-linear-gradient(to right, #0f2027, #203a43, #2c5364)
+background: linear-gradient(to right, #2c3e50, #4ca1af);
 ```
 
-### Step 2: Calculate Intermediate Steps
+### 2. Calculate 15 Color Steps
 
-For a 10-step gradient across the full line, calculate evenly-spaced RGB values between your base colors.
+Use this Python script to generate the gradient:
 
-**Example calculation:**
-- Start: `#0f2027` (R=15, G=32, B=39)
-- Middle: `#203a43` (R=32, G=58, B=67)
-- End: `#2c5364` (R=44, G=83, B=100)
+```python
+python3 << 'EOF'
+# Start and end colors from your gradient
+r_start, g_start, b_start = 0x2c, 0x3e, 0x50  # #2c3e50
+r_end, g_end, b_end = 0x4c, 0xa1, 0xaf        # #4ca1af
 
-**Formula for smooth transitions:**
-Calculate incremental steps for each RGB channel to create 10 evenly-distributed colors.
-
-Break into 10 steps:
-```toml
-color_line_1 = '#0f2027'  # Step 1: Darkest
-color_line_2 = '#14272f'  # Step 2
-color_line_3 = '#192f37'  # Step 3
-color_line_4 = '#1e373f'  # Step 4
-color_line_5 = '#233f47'  # Step 5
-color_line_6 = '#28474f'  # Step 6
-color_fill = '#2d4f57'    # Step 7: Middle (fill space)
-color_right_1 = '#32575f' # Step 8
-color_right_2 = '#375f67' # Step 9
-color_right_3 = '#3c676f' # Step 10: Lightest
+# Generate 15 steps
+steps = 15
+for i in range(steps):
+    r = int(r_start + (r_end - r_start) * (i / (steps - 1)))
+    g = int(g_start + (g_end - g_start) * (i / (steps - 1)))
+    b = int(b_start + (b_end - b_start) * (i / (steps - 1)))
+    print(f"color_line_{i+1} = '#{r:02x}{g:02x}{b:02x}'  # Step {i+1}/15")
+EOF
 ```
 
-**Pro tip:** Use online tools like [ColorHexa](https://www.colorhexa.com/) to calculate intermediate colors, or use this formula:
-```
-For each step i (0-9):
-  R_i = R_start + (R_end - R_start) * (i / 9)
-  G_i = G_start + (G_end - G_start) * (i / 9)
-  B_i = B_start + (B_end - B_start) * (i / 9)
-```
+### 3. Update the Palette
 
-### Step 3: Update the Palette
+Edit `~/.config/starship.toml` and replace the `[palettes.teal_gradient]` section with your new colors:
 
-Edit the `[palettes.teal_gradient]` section:
 ```toml
 [palettes.teal_gradient]
 color_fg0 = '#ffffff'
 color_fg1 = '#000000'
-# Your gradient colors here
-color_line_1 = '#0f2027'
-color_line_2 = '#152830'
-# ... etc
-color_green = '#98971a'  # For git additions
-color_red = '#cc241d'    # For git deletions
-color_purple = '#b16286' # For special states
-```
-
-### Step 4: Map Colors to Modules
-
-Decide which module gets which color. Current mapping (single-line layout):
-- `color_line_1` → directory
-- `color_line_2` → jobs
-- `color_line_3` → git_branch, git_status, git_state, git_commit (unified git section)
-- `color_line_4` → custom.git_metrics_workdir
-- `color_line_5` → fill (space between left and right)
-- `color_line_6` → docker_context, kubernetes, aws
-- `color_line_7` → os
-- `color_line_8` → username
-- `color_line_9` → time
-
-### Step 5: Update Module Configurations
-
-For each module, ensure both `style` and `format` use the correct color:
-
-```toml
-[directory]
-style = "fg:color_fg0 bg:color_line_4"
-format = "[ $path ]($style)"
-```
-
----
-
-## Adding/Modifying Custom Modules
-
-### Understanding Custom Modules
-
-Custom modules execute shell commands and display the output. They're useful when built-in modules don't meet your needs.
-
-### Example: Git Metrics Custom Module
-
-Our custom module shows `+additions -deletions` for uncommitted changes only:
-
-```toml
-[custom.git_metrics_workdir]
-command = """git diff --numstat 2>/dev/null | awk '{added+=$1; deleted+=$2} END {if (added > 0 || deleted > 0) {if (added > 0) printf "\\033[38;2;152;151;26m+%d\\033[39m", added; if (added > 0 && deleted > 0) printf " "; if (deleted > 0) printf "\\033[38;2;204;36;29m-%d\\033[39m", deleted; printf " "}}'"""
-when = "git rev-parse --is-inside-work-tree 2>/dev/null"
-format = "[[$output](fg:color_fg0 bg:color_line_3)]($style)"
-style = "bg:color_line_3"
-description = "Show git diff stats for working directory with colors"
-```
-
-### Custom Module Anatomy
-
-**Required fields:**
-- `command` - Shell command to execute
-- `format` - How to display the output (use `$output` variable)
-
-**Optional fields:**
-- `when` - Condition to check before running (return code 0 = run)
-- `style` - Default styling
-- `description` - Human-readable description
-- `shell` - Shell to use (defaults to system shell)
-
-### Adding Colors to Custom Module Output
-
-Since custom modules output raw text, you have two options:
-
-#### Option 1: Use ANSI Escape Codes (Recommended for multi-color output)
-
-```bash
-# Green text: \033[38;2;R;G;Bm
-# Red text: \033[38;2;R;G;Bm
-# Reset foreground: \033[39m
-# Reset all: \033[0m
-
-printf "\\033[38;2;152;151;26m+%d\\033[39m" $added  # Green
-printf "\\033[38;2;204;36;29m-%d\\033[39m" $deleted # Red
-```
-
-**Important:** Use `\033[39m` (reset foreground only) NOT `\033[0m` (reset all) to preserve background colors!
-
-#### Option 2: Use Starship Format Styling (Single color only)
-
-```toml
-format = "[[$output](fg:color_green bg:color_line_3)]($style)"
-```
-
-This applies one color to the entire output.
-
-### Adding a Custom Module to the Prompt
-
-1. **Define the module** in your config:
-   ```toml
-   [custom.my_module]
-   command = "echo 'Hello'"
-   format = "[[$output](fg:color_fg0 bg:color_line_5)]($style)"
-   style = "bg:color_line_5"
-   ```
-
-2. **Add to format string** (use `${custom.name}` syntax):
-   ```toml
-   format = """
-   [](color_line_1)\
-   $git_branch\
-   ${custom.my_module}\
-   ...
-   """
-   ```
-
-3. **Add separator** before your module if it uses a different color:
-   ```toml
-   [](fg:color_line_4 bg:color_line_5)\
-   ${custom.my_module}\
-   ```
-
-### Testing Custom Modules
-
-Test your command in the terminal first:
-```bash
-cd /path/to/git/repo
-git diff --numstat 2>/dev/null | awk '{added+=$1; deleted+=$2} END {if (added > 0 || deleted > 0) print "+" added " -" deleted}'
-```
-
-Once working, add to Starship config.
-
----
-
-## Common Customization Tasks
-
-### Task 1: Change the Order of Modules
-
-Edit the `format` string. Example - move directory before git info:
-
-**Before:**
-```toml
-format = """
-[](color_line_1)\
-$git_branch\
-[](fg:color_line_1 bg:color_line_4)\
-$directory\
-```
-
-**After:**
-```toml
-format = """
-[](color_line_4)\
-$directory\
-[](fg:color_line_4 bg:color_line_1)\
-$git_branch\
-```
-
-**Remember:** Update separators to match the new color order!
-
-### Task 2: Hide a Module
-
-Set `disabled = true` in the module config:
-```toml
-[memory_usage]
-disabled = true
-```
-
-Or remove it from the format string (cleaner).
-
-### Task 3: Change Module Icon/Symbol
-
-```toml
-[git_branch]
-symbol = "󰘬 "  # Change to your preferred icon
-```
-
-Find icons at [Nerd Fonts Cheat Sheet](https://www.nerdfonts.com/cheat-sheet).
-
-### Task 4: Adjust Module Content
-
-Each module has different options. Example:
-
-```toml
-[directory]
-truncation_length = 3      # Show only last 3 directories
-truncate_to_repo = true    # Truncate to git repo root
-format = "[ $path ]($style)"
-```
-
-Check [Starship documentation](https://starship.rs/config/) for module-specific options.
-
-### Task 5: Change Background Color for One Module
-
-1. Update palette (if needed):
-   ```toml
-   color_line_4 = '#ff0000'  # New red color
-   ```
-
-2. Update module style AND format:
-   ```toml
-   [directory]
-   style = "fg:color_fg0 bg:color_line_4"
-   format = "[ $path ](fg:color_fg0 bg:color_line_4)"
-   ```
-
-3. Update separators around it:
-   ```toml
-   [](fg:color_line_3 bg:color_line_4)\  # Before
-   $directory\
-   [](fg:color_line_4 bg:color_line_5)\  # After
-   ```
-
-### Task 6: Add a New Section with Different Color
-
-1. Add color to palette:
-   ```toml
-   color_line_8 = '#123456'
-   ```
-
-2. Add separator + module to format:
-   ```toml
-   [](fg:color_line_7 bg:color_line_8)\
-   $my_new_module\
-   ```
-
-3. Configure module:
-   ```toml
-   [my_new_module]
-   style = "bg:color_line_8 fg:color_fg0"
-   format = "[[ $symbol ](fg:color_fg0 bg:color_line_8)]($style)"
-   ```
-
-### Task 7: Add OS and Username Modules
-
-To add OS and username information to your prompt:
-
-1. **Add colors to palette:**
-   ```toml
-   color_line_7 = '#273d57'   # os
-   color_line_8 = '#2b415f'   # username
-   color_line_9 = '#2f4667'   # time (if shifting existing modules)
-   ```
-
-2. **Add to format string** (before time):
-   ```toml
-   [](bg:color_line_7 fg:color_line_6)\
-   $os\
-   [](bg:color_line_8 fg:color_line_7)\
-   $username\
-   [](bg:color_line_9 fg:color_line_8)\
-   $time\
-   ```
-
-3. **Configure OS module:**
-   ```toml
-   [os]
-   disabled = false
-   style = "bg:color_line_7"
-   format = '[[ $symbol](fg:color_fg0 bg:color_line_7)]($style)'
-   ```
-
-4. **Configure username module** (note: uses `style_user` and `style_root`):
-   ```toml
-   [username]
-   disabled = false
-   style_user = "bg:color_line_8"
-   style_root = "bg:color_line_8"
-   format = '[[ $user](fg:color_fg0 bg:color_line_8)]($style)'
-   show_always = true
-   ```
-
-**Important:** The username module requires `style_user` and `style_root` instead of just `style`. Both should use the same background color for consistent gradient.
-
-### Task 8: Create a Single-Line Layout with Fill
-
-To put everything on one line with right-aligned content:
-
-1. **Move right_format content to main format:**
-   ```toml
-   format = """
-   [](color_line_1)\
-   $directory\
-   ...\
-   [](fg:color_line_6)\
-   $fill\
-   [](fg:color_right_1)\
-   $docker_context\
-   ...\
-   $line_break$character"""
-   
-   right_format = ""
-   ```
-
-2. **Configure the fill module:**
-   ```toml
-   [fill]
-   symbol = " "
-   style = "bg:color_fill"
-   ```
-
-3. **Add fill color to palette:**
-   ```toml
-   color_fill = '#2d4f57'  # Transition color between left and right
-   ```
-
-4. **Add separators around fill:**
-   - Before fill: `[](fg:color_line_6 bg:color_fill)\`
-   - After fill: `[](bg:color_right_1 fg:color_fill)\`
-
-The `$fill` module automatically expands to fill available terminal width, pushing right-side content to the edge while maintaining the gradient.
-
----
-
-## Troubleshooting
-
-### Problem: Background Colors Don't Match
-
-**Symptom:** Black gaps or color breaks in the gradient.
-
-**Solution:** Ensure `style` and `format` both specify the same background:
-```toml
-[git_branch]
-style = "bg:color_line_1"  # ← Must match
-format = '[[ $symbol $branch ](fg:color_fg0 bg:color_line_1)]($style)'  # ← Must match
-```
-
-### Problem: Custom Module Shows Variable Name
-
-**Symptom:** Seeing `${custom.my_module}` or `.my_module` in prompt.
-
-**Solution:** 
-1. Use `${custom.name}` syntax (with curly braces) in format string
-2. Ensure module is defined with `[custom.name]` section
-3. Check that `when` condition returns true (test command manually)
-
-### Problem: Colors Reset After Custom Module
-
-**Symptom:** Everything after custom module loses background color.
-
-**Solution:** Use `\033[39m` (reset foreground) instead of `\033[0m` (reset all) in your custom command:
-
-```bash
-# BAD - resets everything including background
-printf "\\033[31mRed\\033[0m"
-
-# GOOD - resets only foreground color
-printf "\\033[31mRed\\033[39m"
-```
-
-### Problem: Gradient Looks Uneven
-
-**Symptom:** Some color transitions are too abrupt, others too subtle.
-
-**Solution:** Recalculate intermediate colors with better spacing. Use a color interpolation tool or manually adjust RGB values to create smoother transitions.
-
-### Problem: Module Not Showing
-
-**Checklist:**
-1. Is it in the `format` string?
-2. Is `disabled = false` (or not set)?
-3. For custom modules: Does `when` condition pass?
-4. For custom modules: Does `command` produce output?
-5. Test command manually in terminal
-
-### Problem: "Unknown key" Error for Username Module
-
-**Symptom:** Error message: `Error in 'Username' at 'style': Unknown key (Did you mean 'style_user'?)`
-
-**Solution:** The username module uses special style fields:
-```toml
-# WRONG
-[username]
-style = "bg:color_line_8 fg:color_fg0"
-
-# CORRECT
-[username]
-style_user = "bg:color_line_8"
-style_root = "bg:color_line_8"
-format = '[[ $user](fg:color_fg0 bg:color_line_8)]($style)'
-```
-
-**Key points:**
-- Use `style_user` for regular users
-- Use `style_root` for root user
-- Don't specify foreground color in style fields, only in format
-- Both style fields should use the same background for consistent gradient
-
----
-
-## Quick Reference: Prompt for AI
-
-When asking an AI to modify your Starship config, provide:
-
-```
-I want to modify my Starship prompt configuration at:
-/Users/corey/Projects/dotfiles/apps/shared/starship/.config/starship.toml
-
-Current setup:
-- Using a gradient from [start color] to [end color]
-- Modules in order: [list modules]
-- Custom modules: [list custom modules and what they do]
-
-Task: [specific change you want]
-
-Important constraints:
-1. Each module needs bg:color in BOTH style and format fields
-2. Custom modules use ${custom.name} syntax in format string
-3. Powerline separators use [](bg:new_color fg:old_color) before each section
-4. ANSI codes in custom modules should use \033[39m not \033[0m to preserve background
-5. Test all git-related features to ensure they work after commit
-
-Please update the configuration following the CUSTOMIZATION_GUIDE.md in the same directory.
-```
-
----
-
-## Additional Resources
-
-- [Starship Documentation](https://starship.rs/config/)
-- [Nerd Fonts Cheat Sheet](https://www.nerdfonts.com/cheat-sheet) - For icons/symbols
-- [UI Gradients](https://uigradients.com) - For gradient color inspiration
-- [Coolors](https://coolors.co) - Color palette generator
-- [ANSI Escape Codes](https://en.wikipedia.org/wiki/ANSI_escape_code) - For custom module colors
-
----
-
-## Example: Complete Workflow for Changing Gradient
-
-Let's say you want to change from "Deep Sea Space" to a purple gradient.
-
-### Step 1: Find Gradient Colors
-From uigradients.com: "Velvet Sun"
-```css
-linear-gradient(to right, #e1eec3, #f05053)
-```
-
-### Step 2: Calculate 10 Steps
-```
-#e1eec3 → #e5d9b8 → #e9c4ad → #edafa2 → #f19a97 → 
-#f5858c → #f97081 → #fd5b76 → #ff466b → #f05053
-```
-
-### Step 3: Update Palette
-```toml
-[palettes.teal_gradient]
-color_fg0 = '#ffffff'
-color_fg1 = '#000000'
-color_line_1 = '#e1eec3'
-color_line_2 = '#e5d9b8'
-color_line_3 = '#e9c4ad'
-color_line_4 = '#edafa2'
-color_line_5 = '#f19a97'
-color_line_6 = '#f5858c'
-color_line_7 = '#f97081'
-color_right_1 = '#fd5b76'
-color_right_2 = '#ff466b'
-color_right_3 = '#f05053'
+color_line_1 = '#2c3e50'   # Paste generated colors here
+color_line_2 = '#2e4556'
+# ... paste all 15 colors
+color_line_15 = '#4ca1af'
+# Status colors (keep these)
 color_green = '#98971a'
 color_red = '#cc241d'
 color_purple = '#b16286'
 ```
 
-### Step 4: No Module Changes Needed!
-Since we're using color variables (`color_line_1`, etc.), modules automatically use the new colors. Just reload:
+### 4. Reload
 ```bash
 exec $SHELL
 ```
 
-Done! Your gradient is now purple instead of blue.
+Done! Your gradient updates automatically.
 
 ---
 
-## Conclusion
+## Add More Gradient Spaces
 
-The key to successfully customizing Starship:
-1. **Understand the three-part structure**: format, palette, modules
-2. **Always sync colors**: `style` and `format` must match
-3. **Test custom commands** before adding to config
-4. **Use ANSI codes carefully** (reset foreground, not all formatting)
-5. **Plan your gradient** before implementing
+To make the gradient more visible with wider color blocks, add empty spaces in the format string:
 
-Happy customizing! 🚀
+```toml
+format = """
+[](color_line_1)\
+$directory\
+[](bg:color_line_2 fg:color_line_1)\
+[ ](bg:color_line_2)\  # ← Add these empty space blocks
+[](bg:color_line_3 fg:color_line_2)\
+[ ](bg:color_line_3)\  # ← wherever you want wider sections
+...
+"""
+```
+
+Each `[ ](bg:color_line_X)` creates a visible colored block showing that gradient step.
+
+---
+
+## Important Rules
+
+### 1. Fill Module Must Match Position
+The `$fill` module expands to fill terminal width. Its background color should match its position in the gradient:
+
+```toml
+# If $fill appears after color_line_7, use color_line_8
+[fill]
+symbol = " "
+style = "bg:color_line_8"
+```
+
+### 2. Module Background Colors Must Match
+Each module needs the same background in TWO places:
+
+```toml
+[directory]
+style = "bg:color_line_1"  # ← Must match
+format = "[ $path ](fg:color_fg0 bg:color_line_1)"  # ← Must match
+```
+
+### 3. Powerline Separators
+Separators transition between colors:
+```toml
+[](bg:color_line_2 fg:color_line_1)  # Transitions from line_1 to line_2
+```
+
+---
+
+## Current Layout (15-step gradient)
+
+The prompt uses these color assignments:
+- `color_line_1` → directory
+- `color_line_2` → jobs
+- `color_line_3-7` → empty gradient spaces
+- `color_line_8` → fill (center expander)
+- `color_line_9-11` → empty gradient spaces
+- `color_line_12` → docker/kubernetes/aws (cloud services)
+- `color_line_13` → os icon
+- `color_line_14` → username
+- `color_line_15` → time
+
+---
+
+## Troubleshooting
+
+**Gradient looks broken/has dark gaps:**
+- Check that `$fill` background color matches its position
+- Ensure module `style` and `format` fields use the same `bg:color_line_X`
+
+**Module not showing:**
+- Check `disabled = false` in module config
+- For custom modules, test the `command` manually first
+
+**Colors jump backwards:**
+- Verify the format string uses ascending color numbers (1→2→3, not 1→5→2)
+
+---
+
+## Resources
+
+- [Starship Docs](https://starship.rs/config/) - Full module options
+- [UI Gradients](https://uigradients.com) - Gradient inspiration
+- [Nerd Fonts](https://www.nerdfonts.com/cheat-sheet) - Icons for modules
