@@ -19,20 +19,20 @@ get_ssh_hosts() {
 get_remote_dirs() {
     local host="$1"
 
-    # Get home directory and list directories from there
+    # Get Projects directory and list directories from there
     ssh "$host" bash <<'EOF'
-        # Start from home directory
-        cd ~ || exit 1
+        # Start from Projects directory
+        cd ~/Projects || exit 1
 
         # Find directories, including hidden ones
         find . -maxdepth 3 -type d 2>/dev/null | \
             sed 's|^\./||' | \
-            sed "s|^|$HOME/|" | \
-            grep -v "^$HOME/$" | \
+            sed "s|^|$HOME/Projects/|" | \
+            grep -v "^$HOME/Projects/$" | \
             head -n 1000
 
-        # Also add home directory itself
-        echo "$HOME"
+        # Also add Projects directory itself
+        echo "$HOME/Projects"
 EOF
 }
 
