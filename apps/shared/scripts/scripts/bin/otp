@@ -13,6 +13,7 @@
  *     ./otp list                    List all services
  *     ./otp remove <name>           Remove a secret
  *     ./otp export                  Export all secrets (plaintext)
+ *     ./otp clear-auth              Clear authentication cache
  * 
  * Example:
  *     ./otp add github JBSWY3DPEHPK3PXP
@@ -22,8 +23,11 @@
  * Security:
  *     - Secrets stored securely in macOS Keychain
  *     - Keychain is encrypted and protected by macOS
- *     - No master password required
+ *     - Authentication cached for configurable timeout (default: 30 seconds)
  *     - Secrets accessible only to your user account
+ * 
+ * Configuration:
+ *     AUTH_TIMEOUT - Authentication cache timeout in seconds (line 37)
  */
 
 const crypto = require('crypto');
@@ -34,7 +38,23 @@ const fs = require('fs');
 // Configuration
 const KEYCHAIN_SERVICE_PREFIX = 'otp-manager';
 const KEYCHAIN_AUTH_PREFIX = 'otp-manager-auth';
-const AUTH_TIMEOUT = 30; // 24 hours in seconds
+const AUTH_TIMEOUT = 30; // Authentication timeout in seconds
+
+/**
+ * Format seconds into human-readable time string
+ */
+function formatTimeout(seconds) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    
+    const parts = [];
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0) parts.push(`${minutes}m`);
+    if (secs > 0 || parts.length === 0) parts.push(`${secs}s`);
+    
+    return parts.join(' ');
+}
 
 /**
  * Store authentication timestamp in keychain
@@ -72,9 +92,8 @@ function isAuthValid() {
             return false;
         }
         
-        const hoursRemaining = Math.floor((AUTH_TIMEOUT - age) / 3600);
-        const minutesRemaining = Math.floor(((AUTH_TIMEOUT - age) % 3600) / 60);
-        console.log(`(Authentication valid for ${hoursRemaining}h ${minutesRemaining}m)`);
+        const remainingSeconds = Math.floor(AUTH_TIMEOUT - age);
+        console.log(`(Authentication valid for ${formatTimeout(remainingSeconds)})`);
         
         return true;
     } catch (error) {
@@ -183,7 +202,7 @@ async function authenticate() {
         return true;
     }
     
-    console.log('(Authentication expired after 24 hours)');
+    console.log(`(Authentication expired after ${formatTimeout(AUTH_TIMEOUT)})`);
     
     try {
         const password = await getPassword();
@@ -207,7 +226,7 @@ async function authenticate() {
             
             // Password correct, store auth timestamp
             storeAuthTimestamp();
-            console.log('(Authentication successful - valid for 24 hours)');
+            console.log(`(Authentication successful - valid for ${formatTimeout(AUTH_TIMEOUT)})`);
             return true;
         } catch (error) {
             console.error('Incorrect password');
@@ -553,7 +572,7 @@ Usage:
     otp list                    List all services
     otp remove <name>           Remove a secret
     otp export                  Export all secrets (plaintext)
-    otp clear-auth              Clear 24-hour authentication
+    otp clear-auth              Clear ${formatTimeout(AUTH_TIMEOUT)} authentication
 
 Examples:
     otp add github JBSWY3DPEHPK3PXP
