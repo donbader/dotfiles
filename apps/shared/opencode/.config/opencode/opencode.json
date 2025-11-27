@@ -47,6 +47,14 @@
         "chrome-devtools-mcp@latest"
       ],
       "enabled": true
+    },
+    "grep": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "grep-mcp"
+      ],
+      "enabled": true
     }
   }
 }
