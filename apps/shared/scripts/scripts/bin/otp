@@ -1,13 +1,11 @@
 #!/usr/bin/env node
 /**
- * Secure OTP Manager - Store and retrieve OTP secrets with encryption
+ * Secure OTP Manager - Store and retrieve OTP secrets using macOS Keychain
  * 
- * This script manages TOTP (Time-based One-Time Password) secrets in an encrypted file.
- * The encrypted file can be safely committed to version control.
+ * This script manages TOTP (Time-based One-Time Password) secrets in macOS Keychain.
  * 
  * Requirements:
- *     None - uses built-in Node.js crypto module
- *     macOS Keychain (for password caching)
+ *     None - uses built-in Node.js crypto module and macOS Keychain
  * 
  * Usage:
  *     ./otp add <name> <secret>     Add/update OTP secret
@@ -15,119 +13,88 @@
  *     ./otp list                    List all services
  *     ./otp remove <name>           Remove a secret
  *     ./otp export                  Export all secrets (plaintext)
- *     ./otp clear-cache             Clear cached password
- * 
- * Options:
- *     --no-cache                    Don't use password cache
  * 
  * Example:
  *     ./otp add github JBSWY3DPEHPK3PXP
  *     ./otp get github
  *     # Output: Current OTP for 'github': 123456 (valid for 23 seconds)
- *     # (Password cached for 5 minutes)
  * 
  * Security:
- *     - Uses AES-256-GCM for encryption
- *     - PBKDF2 key derivation with 600,000 iterations
- *     - Random salt per encryption
- *     - Password cached securely in macOS Keychain for 24 hours
- *     - Password never stored in plaintext files
- *     - Encrypted file safe to commit to git
+ *     - Secrets stored securely in macOS Keychain
+ *     - Keychain is encrypted and protected by macOS
+ *     - No master password required
+ *     - Secrets accessible only to your user account
  */
 
 const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
-const readline = require('readline');
 const { execSync } = require('child_process');
+const readline = require('readline');
+const fs = require('fs');
 
 // Configuration
-const SCRIPT_DIR = path.join(__dirname, '..');
-const ENCRYPTED_FILE = path.join(SCRIPT_DIR, 'data', 'otp_secrets.enc');
-const KDF_ITERATIONS = 600000; // OWASP recommended minimum for PBKDF2
-const KEYCHAIN_SERVICE = 'otp-manager';
-const KEYCHAIN_ACCOUNT = 'master-password-cache';
-const CACHE_TIMEOUT = 24 * 60 * 60; // 24 hours in seconds
+const KEYCHAIN_SERVICE_PREFIX = 'otp-manager';
+const KEYCHAIN_AUTH_PREFIX = 'otp-manager-auth';
+const AUTH_TIMEOUT = 24 * 60 * 60; // 24 hours in seconds
 
 /**
- * Check if password caching is disabled via flag
+ * Store authentication timestamp in keychain
  */
-function isCacheDisabled() {
-    return process.argv.includes('--no-cache');
-}
-
-/**
- * Store password in macOS Keychain with timeout
- */
-function cachePassword(password) {
-    if (isCacheDisabled()) return;
-    
+function storeAuthTimestamp() {
     try {
         // Delete existing entry first (ignore errors)
         try {
-            execSync(`security delete-generic-password -s "${KEYCHAIN_SERVICE}" -a "${KEYCHAIN_ACCOUNT}" 2>/dev/null`);
+            execSync(`security delete-generic-password -s "${KEYCHAIN_AUTH_PREFIX}" -a "timestamp" 2>/dev/null`);
         } catch (e) {}
         
-        // Add password to keychain with timestamp
-        const data = JSON.stringify({
-            password: password,
-            timestamp: Date.now()
-        });
-        
-        execSync(`security add-generic-password -s "${KEYCHAIN_SERVICE}" -a "${KEYCHAIN_ACCOUNT}" -w "${data.replace(/"/g, '\\"')}"`, {
+        const timestamp = Date.now();
+        execSync(`security add-generic-password -s "${KEYCHAIN_AUTH_PREFIX}" -a "timestamp" -w "${timestamp}" -A`, {
             stdio: 'pipe'
         });
     } catch (error) {
-        // Silently fail - caching is optional
+        // Silently fail
     }
 }
 
 /**
- * Retrieve cached password from macOS Keychain
+ * Check if authentication is still valid
  */
-function getCachedPassword() {
-    if (isCacheDisabled()) return null;
-    
+function isAuthValid() {
     try {
-        const result = execSync(`security find-generic-password -s "${KEYCHAIN_SERVICE}" -a "${KEYCHAIN_ACCOUNT}" -w 2>/dev/null`, {
+        const result = execSync(`security find-generic-password -s "${KEYCHAIN_AUTH_PREFIX}" -a "timestamp" -w 2>/dev/null`, {
             encoding: 'utf8',
             stdio: 'pipe'
         }).trim();
         
-        const data = JSON.parse(result);
+        const timestamp = parseInt(result, 10);
+        const age = (Date.now() - timestamp) / 1000; // in seconds
         
-        // Check if cache has expired
-        const age = (Date.now() - data.timestamp) / 1000; // in seconds
-        if (age > CACHE_TIMEOUT) {
-            clearPasswordCache();
-            return null;
+        if (age > AUTH_TIMEOUT) {
+            return false;
         }
         
-        return data.password;
+        const hoursRemaining = Math.floor((AUTH_TIMEOUT - age) / 3600);
+        const minutesRemaining = Math.floor(((AUTH_TIMEOUT - age) % 3600) / 60);
+        console.log(`(Authentication valid for ${hoursRemaining}h ${minutesRemaining}m)`);
+        
+        return true;
     } catch (error) {
-        return null;
+        return false;
     }
 }
 
 /**
- * Clear cached password from Keychain
+ * Clear authentication timestamp
  */
-function clearPasswordCache() {
+function clearAuth() {
     try {
-        execSync(`security delete-generic-password -s "${KEYCHAIN_SERVICE}" -a "${KEYCHAIN_ACCOUNT}" 2>/dev/null`);
+        execSync(`security delete-generic-password -s "${KEYCHAIN_AUTH_PREFIX}" -a "timestamp" 2>/dev/null`);
     } catch (e) {}
 }
 
 /**
  * Prompts for password input (hidden)
  */
-function getPassword(prompt = 'Enter master password: ') {
-    // Try to get cached password first
-    const cached = getCachedPassword();
-    if (cached) {
-        return Promise.resolve(cached);
-    }
-    
+function getPassword(prompt = 'Enter password to access OTP secrets: ') {
     return new Promise((resolve, reject) => {
         const { execSync } = require('child_process');
         
@@ -176,8 +143,6 @@ function getPassword(prompt = 'Enter master password: ') {
                 if (!password || password.length === 0) {
                     reject(new Error('Password cannot be empty'));
                 } else {
-                    // Cache the password for future use
-                    cachePassword(password);
                     resolve(password);
                 }
             } else {
@@ -211,6 +176,112 @@ function getPassword(prompt = 'Enter master password: ') {
 }
 
 /**
+ * Verify keychain password and update auth timestamp
+ */
+async function authenticate() {
+    if (isAuthValid()) {
+        return true;
+    }
+    
+    console.log('(Authentication expired after 24 hours)');
+    
+    try {
+        const password = await getPassword();
+        
+        // Verify password by trying to unlock the keychain
+        try {
+            execSync(`security unlock-keychain -p "${password.replace(/"/g, '\\"')}"`, {
+                stdio: 'pipe'
+            });
+            
+            // Password correct, store auth timestamp
+            storeAuthTimestamp();
+            console.log('(Authentication successful - valid for 24 hours)');
+            return true;
+        } catch (error) {
+            console.error('Incorrect password');
+            return false;
+        }
+    } catch (error) {
+        if (error.message === 'Cancelled') {
+            throw error;
+        }
+        console.error(`Authentication failed: ${error.message}`);
+        return false;
+    }
+}
+
+/**
+ * Store OTP secret in macOS Keychain
+ */
+function storeSecret(name, secret) {
+    try {
+        // Delete existing entry first (ignore errors)
+        try {
+            execSync(`security delete-generic-password -s "${KEYCHAIN_SERVICE_PREFIX}" -a "${name}" 2>/dev/null`);
+        } catch (e) {}
+        
+        // Add secret to keychain
+        // -A allows all applications to access this item without prompting
+        execSync(`security add-generic-password -s "${KEYCHAIN_SERVICE_PREFIX}" -a "${name}" -w "${secret}" -A`, {
+            stdio: 'pipe'
+        });
+    } catch (error) {
+        throw new Error(`Failed to store secret in keychain: ${error.message}`);
+    }
+}
+
+/**
+ * Retrieve OTP secret from macOS Keychain
+ */
+function getSecret(name) {
+    try {
+        const result = execSync(`security find-generic-password -s "${KEYCHAIN_SERVICE_PREFIX}" -a "${name}" -w 2>/dev/null`, {
+            encoding: 'utf8',
+            stdio: 'pipe'
+        }).trim();
+        
+        return result;
+    } catch (error) {
+        return null;
+    }
+}
+
+/**
+ * Delete OTP secret from macOS Keychain
+ */
+function deleteSecret(name) {
+    try {
+        execSync(`security delete-generic-password -s "${KEYCHAIN_SERVICE_PREFIX}" -a "${name}" 2>/dev/null`);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+/**
+ * List all OTP secrets from macOS Keychain
+ */
+function listSecrets() {
+    try {
+        // Use security dump-keychain to find all entries with our service name
+        // 0x00000007 is the attribute code for "svce" (service)
+        const result = execSync(`security dump-keychain 2>/dev/null | grep -A 2 '0x00000007 <blob>="${KEYCHAIN_SERVICE_PREFIX}"' | grep '"acct"<blob>=' | sed 's/.*"acct"<blob>="\\(.*\\)".*/\\1/'`, {
+            encoding: 'utf8',
+            stdio: 'pipe'
+        }).trim();
+        
+        if (!result) {
+            return [];
+        }
+        
+        return result.split('\n').filter(line => line.length > 0);
+    } catch (error) {
+        return [];
+    }
+}
+
+/**
  * Prompts for confirmation
  */
 function confirm(prompt) {
@@ -225,148 +296,6 @@ function confirm(prompt) {
             resolve(answer.toLowerCase() === 'yes');
         });
     });
-}
-
-/**
- * Derive encryption key from password using PBKDF2
- */
-function deriveKey(password, salt) {
-    return crypto.pbkdf2Sync(password, salt, KDF_ITERATIONS, 32, 'sha256');
-}
-
-/**
- * Create password verification hash
- */
-function createPasswordHash(password, salt) {
-    return crypto.pbkdf2Sync(password, salt, KDF_ITERATIONS, 32, 'sha256');
-}
-
-/**
- * Encrypt plaintext with password
- */
-function encrypt(plaintext, password) {
-    // Generate random salt and IV
-    const salt = crypto.randomBytes(16);
-    const iv = crypto.randomBytes(12);
-    
-    // Derive key from password
-    const key = deriveKey(password, salt);
-    
-    // Create password verification hash using a different salt
-    const hashSalt = crypto.randomBytes(16);
-    const passwordHash = createPasswordHash(password, hashSalt);
-    
-    // Encrypt using AES-256-GCM
-    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-    
-    let encrypted = cipher.update(plaintext, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    
-    // Get authentication tag
-    const authTag = cipher.getAuthTag();
-    
-    // Combine hashSalt + passwordHash + salt + iv + authTag + ciphertext
-    const combined = Buffer.concat([
-        hashSalt,           // 16 bytes
-        passwordHash,       // 32 bytes
-        salt,              // 16 bytes
-        iv,                // 12 bytes
-        authTag,           // 16 bytes
-        Buffer.from(encrypted, 'hex')
-    ]);
-    
-    return combined.toString('base64');
-}
-
-/**
- * Decrypt ciphertext with password
- */
-function decrypt(encryptedB64, password) {
-    try {
-        // Decode from base64
-        const encryptedData = Buffer.from(encryptedB64, 'base64');
-        
-        // Check if this is the new format (with password hash) or old format
-        const hasPasswordHash = encryptedData.length >= 92; // Min size with hash
-        
-        let salt, iv, authTag, ciphertext;
-        
-        if (hasPasswordHash && encryptedData.length >= 92) {
-            // Try new format first: hashSalt(16) + passwordHash(32) + salt(16) + iv(12) + authTag(16) + ciphertext
-            const hashSalt = encryptedData.slice(0, 16);
-            const storedPasswordHash = encryptedData.slice(16, 48);
-            
-            // Verify password before attempting decryption
-            const passwordHash = createPasswordHash(password, hashSalt);
-            if (!crypto.timingSafeEqual(passwordHash, storedPasswordHash)) {
-                throw new Error('Incorrect password');
-            }
-            
-            // Extract remaining components
-            salt = encryptedData.slice(48, 64);
-            iv = encryptedData.slice(64, 76);
-            authTag = encryptedData.slice(76, 92);
-            ciphertext = encryptedData.slice(92);
-        } else {
-            // Old format: salt(16) + iv(12) + authTag(16) + ciphertext
-            salt = encryptedData.slice(0, 16);
-            iv = encryptedData.slice(16, 28);
-            authTag = encryptedData.slice(28, 44);
-            ciphertext = encryptedData.slice(44);
-        }
-        
-        // Derive key from password
-        const key = deriveKey(password, salt);
-        
-        // Decrypt using AES-256-GCM
-        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-        decipher.setAuthTag(authTag);
-        
-        let decrypted = decipher.update(ciphertext, null, 'utf8');
-        decrypted += decipher.final('utf8');
-        
-        return decrypted;
-    } catch (error) {
-        if (error.message === 'Incorrect password') {
-            throw new Error('Incorrect password');
-        }
-        throw new Error('Decryption failed. Incorrect password or corrupted file.');
-    }
-}
-
-/**
- * Load and decrypt secrets from file
- */
-async function loadSecrets(password) {
-    if (!fs.existsSync(ENCRYPTED_FILE)) {
-        return {};
-    }
-    
-    const encryptedData = fs.readFileSync(ENCRYPTED_FILE, 'utf8').trim();
-    
-    if (!encryptedData) {
-        return {};
-    }
-    
-    try {
-        const plaintext = decrypt(encryptedData, password);
-        // Password was correct, cache it
-        cachePassword(password);
-        return JSON.parse(plaintext);
-    } catch (error) {
-        // Wrong password, clear cache
-        clearPasswordCache();
-        throw error;
-    }
-}
-
-/**
- * Encrypt and save secrets to file
- */
-function saveSecrets(secrets, password) {
-    const plaintext = JSON.stringify(secrets, null, 2);
-    const encryptedData = encrypt(plaintext, password);
-    fs.writeFileSync(ENCRYPTED_FILE, encryptedData, 'utf8');
 }
 
 /**
@@ -439,17 +368,13 @@ function generateTOTP(secret, timeStep = 30) {
  */
 async function addSecret(name, secret) {
     try {
-        const password = await getPassword();
-        
         // Validate the secret by trying to generate a TOTP
         const cleanSecret = secret.replace(/\s/g, '').toUpperCase();
         generateTOTP(cleanSecret); // Will throw if invalid
         
-        const secrets = await loadSecrets(password);
-        secrets[name] = cleanSecret;
-        saveSecrets(secrets, password);
+        storeSecret(name, cleanSecret);
         
-        console.log(`✓ Secret for '${name}' saved successfully`);
+        console.log(`✓ Secret for '${name}' saved successfully to Keychain`);
         return true;
     } catch (error) {
         console.error(`Error: ${error.message}`);
@@ -462,16 +387,20 @@ async function addSecret(name, secret) {
  */
 async function getOTP(name) {
     try {
-        const password = await getPassword();
-        const secrets = await loadSecrets(password);
-        
-        if (!(name in secrets)) {
-            console.error(`Error: No secret found for '${name}'`);
-            console.error(`Available services: ${Object.keys(secrets).join(', ')}`);
+        // Check authentication first
+        const authenticated = await authenticate();
+        if (!authenticated) {
             return false;
         }
         
-        const secret = secrets[name];
+        const secret = getSecret(name);
+        
+        if (!secret) {
+            console.error(`Error: No secret found for '${name}'`);
+            console.error(`Use 'otp list' to see available services`);
+            return false;
+        }
+        
         const { code, timeRemaining } = generateTOTP(secret);
         
         console.log(`\nCurrent OTP for '${name}': ${code}`);
@@ -488,10 +417,13 @@ async function getOTP(name) {
  */
 async function listServices() {
     try {
-        const password = await getPassword();
-        const secrets = await loadSecrets(password);
+        // Check authentication first
+        const authenticated = await authenticate();
+        if (!authenticated) {
+            return false;
+        }
         
-        const services = Object.keys(secrets);
+        const services = listSecrets();
         
         if (services.length === 0) {
             console.log('No services stored yet.');
@@ -514,18 +446,14 @@ async function listServices() {
  */
 async function removeSecret(name) {
     try {
-        const password = await getPassword();
-        const secrets = await loadSecrets(password);
+        const success = deleteSecret(name);
         
-        if (!(name in secrets)) {
+        if (!success) {
             console.error(`Error: No secret found for '${name}'`);
             return false;
         }
         
-        delete secrets[name];
-        saveSecrets(secrets, password);
-        
-        console.log(`✓ Secret for '${name}' removed successfully`);
+        console.log(`✓ Secret for '${name}' removed successfully from Keychain`);
         return true;
     } catch (error) {
         console.error(`Error: ${error.message}`);
@@ -538,7 +466,11 @@ async function removeSecret(name) {
  */
 async function exportSecrets() {
     try {
-        const password = await getPassword();
+        // Check authentication first
+        const authenticated = await authenticate();
+        if (!authenticated) {
+            return false;
+        }
         
         console.log('\n⚠️  WARNING: This will display all secrets in plaintext!');
         const confirmed = await confirm('Type \'yes\' to continue: ');
@@ -548,14 +480,17 @@ async function exportSecrets() {
             return false;
         }
         
-        const secrets = await loadSecrets(password);
+        const services = listSecrets();
         
         console.log('\n' + '='.repeat(60));
         console.log('SECRETS (keep this secure!):');
         console.log('='.repeat(60));
         
-        Object.keys(secrets).sort().forEach(name => {
-            console.log(`${name}: ${secrets[name]}`);
+        services.sort().forEach(name => {
+            const secret = getSecret(name);
+            if (secret) {
+                console.log(`${name}: ${secret}`);
+            }
         });
         
         console.log('='.repeat(60) + '\n');
@@ -571,7 +506,7 @@ async function exportSecrets() {
  */
 function printUsage() {
     console.log(`
-Secure OTP Manager
+Secure OTP Manager (using macOS Keychain)
 
 Usage:
     otp add <name> <secret>     Add/update OTP secret
@@ -579,16 +514,12 @@ Usage:
     otp list                    List all services
     otp remove <name>           Remove a secret
     otp export                  Export all secrets (plaintext)
-    otp clear-cache             Clear cached password
-
-Options:
-    --no-cache                  Don't use password cache for this operation
+    otp clear-auth              Clear 24-hour authentication
 
 Examples:
     otp add github JBSWY3DPEHPK3PXP
     otp get github
     otp list
-    otp get github --no-cache   # Force password prompt
     `);
 }
 
@@ -641,9 +572,9 @@ async function main() {
                 success = await exportSecrets();
                 break;
             
-            case 'clear-cache':
-                clearPasswordCache();
-                console.log('✓ Password cache cleared');
+            case 'clear-auth':
+                clearAuth();
+                console.log('✓ Authentication cleared (will require password on next access)');
                 success = true;
                 break;
             
