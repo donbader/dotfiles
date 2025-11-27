@@ -38,7 +38,7 @@ const fs = require('fs');
 // Configuration
 const KEYCHAIN_SERVICE_PREFIX = 'otp-manager';
 const KEYCHAIN_AUTH_PREFIX = 'otp-manager-auth';
-const AUTH_TIMEOUT = 30; // Authentication timeout in seconds
+const AUTH_TIMEOUT = 24 * 60 * 60; // Authentication timeout in seconds
 
 /**
  * Format seconds into human-readable time string
@@ -47,12 +47,12 @@ function formatTimeout(seconds) {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    
+
     const parts = [];
     if (hours > 0) parts.push(`${hours}h`);
     if (minutes > 0) parts.push(`${minutes}m`);
     if (secs > 0 || parts.length === 0) parts.push(`${secs}s`);
-    
+
     return parts.join(' ');
 }
 
@@ -64,8 +64,8 @@ function storeAuthTimestamp() {
         // Delete existing entry first (ignore errors)
         try {
             execSync(`security delete-generic-password -s "${KEYCHAIN_AUTH_PREFIX}" -a "timestamp" 2>/dev/null`);
-        } catch (e) {}
-        
+        } catch (e) { }
+
         const timestamp = Date.now();
         execSync(`security add-generic-password -s "${KEYCHAIN_AUTH_PREFIX}" -a "timestamp" -w "${timestamp}"`, {
             stdio: 'pipe'
@@ -84,17 +84,17 @@ function isAuthValid() {
             encoding: 'utf8',
             stdio: 'pipe'
         }).trim();
-        
+
         const timestamp = parseInt(result, 10);
         const age = (Date.now() - timestamp) / 1000; // in seconds
-        
+
         if (age > AUTH_TIMEOUT) {
             return false;
         }
-        
+
         const remainingSeconds = Math.floor(AUTH_TIMEOUT - age);
         console.log(`(Authentication valid for ${formatTimeout(remainingSeconds)})`);
-        
+
         return true;
     } catch (error) {
         return false;
@@ -107,7 +107,7 @@ function isAuthValid() {
 function clearAuth() {
     try {
         execSync(`security delete-generic-password -s "${KEYCHAIN_AUTH_PREFIX}" -a "timestamp" 2>/dev/null`);
-    } catch (e) {}
+    } catch (e) { }
 }
 
 /**
@@ -116,48 +116,48 @@ function clearAuth() {
 function getPassword(prompt = 'Enter password to access OTP secrets: ') {
     return new Promise((resolve, reject) => {
         const { execSync } = require('child_process');
-        
+
         // Use /dev/tty to ensure we can always read password even if stdout is redirected
         const ttyFd = fs.openSync('/dev/tty', 'r+');
         const input = fs.createReadStream(null, { fd: ttyFd });
         const output = fs.createWriteStream(null, { fd: ttyFd });
-        
+
         // Write prompt
         output.write(prompt);
-        
+
         // Disable echo using stty
         try {
             execSync('stty -echo', { stdio: ['inherit', 'inherit', 'inherit'] });
         } catch (e) {
             // If stty fails, continue anyway
         }
-        
+
         let password = '';
         let resolved = false;
-        
+
         input.on('data', (chunk) => {
             if (resolved) return;
-            
+
             const str = chunk.toString();
-            
+
             // Check for newline/return anywhere in the chunk
             const newlineIndex = str.search(/[\n\r]/);
-            
+
             if (newlineIndex !== -1) {
                 // Add everything before the newline to password
                 password += str.substring(0, newlineIndex);
-                
+
                 // Re-enable echo
                 try {
                     execSync('stty echo', { stdio: ['inherit', 'inherit', 'inherit'] });
-                } catch (e) {}
-                
+                } catch (e) { }
+
                 output.write('\n');
                 input.destroy();
                 output.destroy();
-                
+
                 resolved = true;
-                
+
                 // Validate password is not empty
                 if (!password || password.length === 0) {
                     reject(new Error('Password cannot be empty'));
@@ -168,28 +168,28 @@ function getPassword(prompt = 'Enter password to access OTP secrets: ') {
                 password += str;
             }
         });
-        
+
         input.on('error', (err) => {
             if (resolved) return;
             // Re-enable echo on error
             try {
                 execSync('stty echo', { stdio: ['inherit', 'inherit', 'inherit'] });
-            } catch (e) {}
+            } catch (e) { }
             resolved = true;
             reject(err);
         });
-        
+
         // Handle Ctrl+C
         const sigintHandler = () => {
             if (resolved) return;
             try {
                 execSync('stty echo', { stdio: ['inherit', 'inherit', 'inherit'] });
-            } catch (e) {}
+            } catch (e) { }
             output.write('\n');
             resolved = true;
             reject(new Error('Cancelled'));
         };
-        
+
         process.on('SIGINT', sigintHandler);
     });
 }
@@ -201,12 +201,12 @@ async function authenticate() {
     if (isAuthValid()) {
         return true;
     }
-    
+
     console.log(`(Authentication expired after ${formatTimeout(AUTH_TIMEOUT)})`);
-    
+
     try {
         const password = await getPassword();
-        
+
         // Verify password by trying to unlock the keychain and set partition list
         // This allows the trusted apps to access without prompts
         try {
@@ -214,7 +214,7 @@ async function authenticate() {
             execSync(`security unlock-keychain -p "${password.replace(/"/g, '\\"')}"`, {
                 stdio: 'pipe'
             });
-            
+
             // Set partition list for auth timestamp to allow access without prompts
             try {
                 execSync(`security set-generic-password-partition-list -s "${KEYCHAIN_AUTH_PREFIX}" -a "timestamp" -k "${password.replace(/"/g, '\\"')}" 2>/dev/null`, {
@@ -223,7 +223,7 @@ async function authenticate() {
             } catch (e) {
                 // Ignore if item doesn't exist yet
             }
-            
+
             // Password correct, store auth timestamp
             storeAuthTimestamp();
             console.log(`(Authentication successful - valid for ${formatTimeout(AUTH_TIMEOUT)})`);
@@ -249,8 +249,8 @@ function storeSecret(name, secret) {
         // Delete existing entry first (ignore errors)
         try {
             execSync(`security delete-generic-password -s "${KEYCHAIN_SERVICE_PREFIX}" -a "${name}" 2>/dev/null`);
-        } catch (e) {}
-        
+        } catch (e) { }
+
         // Add secret to keychain
         // Access control will be set via set-generic-password-partition-list
         execSync(`security add-generic-password -s "${KEYCHAIN_SERVICE_PREFIX}" -a "${name}" -w "${secret}"`, {
@@ -272,7 +272,7 @@ function getSecret(name) {
             encoding: 'utf8',
             stdio: 'pipe'
         }).trim();
-        
+
         return result;
     } catch (error) {
         return null;
@@ -302,11 +302,11 @@ function listSecrets() {
             encoding: 'utf8',
             stdio: 'pipe'
         }).trim();
-        
+
         if (!result) {
             return [];
         }
-        
+
         return result.split('\n').filter(line => line.length > 0);
     } catch (error) {
         return [];
@@ -336,19 +336,19 @@ function confirm(prompt) {
 function base32Decode(input) {
     const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
     const cleanInput = input.replace(/=+$/, '').toUpperCase();
-    
+
     let bits = '';
     for (let i = 0; i < cleanInput.length; i++) {
         const val = alphabet.indexOf(cleanInput[i]);
         if (val === -1) throw new Error('Invalid base32 character');
         bits += val.toString(2).padStart(5, '0');
     }
-    
+
     const bytes = [];
     for (let i = 0; i + 8 <= bits.length; i += 8) {
         bytes.push(parseInt(bits.slice(i, i + 8), 2));
     }
-    
+
     return Buffer.from(bytes);
 }
 
@@ -360,20 +360,20 @@ function generateTOTP(secret, timeStep = 30) {
         // Clean and decode secret
         const cleanSecret = secret.replace(/\s/g, '').toUpperCase();
         const key = base32Decode(cleanSecret);
-        
+
         // Calculate time counter
         const now = Math.floor(Date.now() / 1000);
         const counter = Math.floor(now / timeStep);
-        
+
         // Create counter buffer (8 bytes, big-endian)
         const counterBuffer = Buffer.alloc(8);
         counterBuffer.writeBigInt64BE(BigInt(counter));
-        
+
         // Generate HMAC
         const hmac = crypto.createHmac('sha1', key);
         hmac.update(counterBuffer);
         const digest = hmac.digest();
-        
+
         // Dynamic truncation
         const offset = digest[digest.length - 1] & 0x0f;
         const code = (
@@ -382,10 +382,10 @@ function generateTOTP(secret, timeStep = 30) {
             ((digest[offset + 2] & 0xff) << 8) |
             (digest[offset + 3] & 0xff)
         ) % 1000000;
-        
+
         // Time remaining
         const timeRemaining = timeStep - (now % timeStep);
-        
+
         return {
             code: code.toString().padStart(6, '0'),
             timeRemaining
@@ -403,10 +403,10 @@ async function addSecret(name, secret) {
         // Validate the secret by trying to generate a TOTP
         const cleanSecret = secret.replace(/\s/g, '').toUpperCase();
         generateTOTP(cleanSecret); // Will throw if invalid
-        
+
         // Get password to authorize the partition list update
         const password = await getPassword('Enter keychain password to save secret: ');
-        
+
         // Verify password first
         try {
             execSync(`security unlock-keychain -p "${password.replace(/"/g, '\\"')}"`, {
@@ -416,10 +416,10 @@ async function addSecret(name, secret) {
             console.error('Incorrect password');
             return false;
         }
-        
+
         // Store the secret
         storeSecret(name, cleanSecret);
-        
+
         // Set partition list to allow access without prompts going forward
         try {
             execSync(`security set-generic-password-partition-list -s "${KEYCHAIN_SERVICE_PREFIX}" -a "${name}" -k "${password.replace(/"/g, '\\"')}" 2>/dev/null`, {
@@ -428,7 +428,7 @@ async function addSecret(name, secret) {
         } catch (e) {
             // Continue even if this fails
         }
-        
+
         console.log(`✓ Secret for '${name}' saved successfully to Keychain`);
         return true;
     } catch (error) {
@@ -450,17 +450,17 @@ async function getOTP(name) {
         if (!authenticated) {
             return false;
         }
-        
+
         const secret = getSecret(name);
-        
+
         if (!secret) {
             console.error(`Error: No secret found for '${name}'`);
             console.error(`Use 'otp list' to see available services`);
             return false;
         }
-        
+
         const { code, timeRemaining } = generateTOTP(secret);
-        
+
         console.log(`\nCurrent OTP for '${name}': ${code}`);
         console.log(`Valid for ${timeRemaining} seconds`);
         return true;
@@ -480,14 +480,14 @@ async function listServices() {
         if (!authenticated) {
             return false;
         }
-        
+
         const services = listSecrets();
-        
+
         if (services.length === 0) {
             console.log('No services stored yet.');
             return true;
         }
-        
+
         console.log(`\nStored services (${services.length}):`);
         services.sort().forEach(name => {
             console.log(`  - ${name}`);
@@ -505,12 +505,12 @@ async function listServices() {
 async function removeSecret(name) {
     try {
         const success = deleteSecret(name);
-        
+
         if (!success) {
             console.error(`Error: No secret found for '${name}'`);
             return false;
         }
-        
+
         console.log(`✓ Secret for '${name}' removed successfully from Keychain`);
         return true;
     } catch (error) {
@@ -529,28 +529,28 @@ async function exportSecrets() {
         if (!authenticated) {
             return false;
         }
-        
+
         console.log('\n⚠️  WARNING: This will display all secrets in plaintext!');
         const confirmed = await confirm('Type \'yes\' to continue: ');
-        
+
         if (!confirmed) {
             console.log('Export cancelled.');
             return false;
         }
-        
+
         const services = listSecrets();
-        
+
         console.log('\n' + '='.repeat(60));
         console.log('SECRETS (keep this secure!):');
         console.log('='.repeat(60));
-        
+
         services.sort().forEach(name => {
             const secret = getSecret(name);
             if (secret) {
                 console.log(`${name}: ${secret}`);
             }
         });
-        
+
         console.log('='.repeat(60) + '\n');
         return true;
     } catch (error) {
@@ -586,17 +586,17 @@ Examples:
  */
 async function main() {
     const args = process.argv.slice(2).filter(arg => !arg.startsWith('--'));
-    
+
     if (args.length === 0) {
         printUsage();
         process.exit(1);
     }
-    
+
     const command = args[0].toLowerCase();
-    
+
     try {
         let success = false;
-        
+
         switch (command) {
             case 'add':
                 if (args.length !== 3) {
@@ -605,7 +605,7 @@ async function main() {
                 }
                 success = await addSecret(args[1], args[2]);
                 break;
-            
+
             case 'get':
                 if (args.length !== 2) {
                     console.error('Usage: otp get <name>');
@@ -613,11 +613,11 @@ async function main() {
                 }
                 success = await getOTP(args[1]);
                 break;
-            
+
             case 'list':
                 success = await listServices();
                 break;
-            
+
             case 'remove':
                 if (args.length !== 2) {
                     console.error('Usage: otp remove <name>');
@@ -625,23 +625,23 @@ async function main() {
                 }
                 success = await removeSecret(args[1]);
                 break;
-            
+
             case 'export':
                 success = await exportSecrets();
                 break;
-            
+
             case 'clear-auth':
                 clearAuth();
                 console.log('✓ Authentication cleared (will require password on next access)');
                 success = true;
                 break;
-            
+
             default:
                 console.error(`Error: Unknown command '${command}'`);
                 printUsage();
                 process.exit(1);
         }
-        
+
         process.exit(success ? 0 : 1);
     } catch (error) {
         if (error.message === 'Cancelled') {
