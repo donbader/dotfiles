@@ -12,9 +12,7 @@ $jobs\
 [ ](bg:color_line_4)\
 [](bg:color_line_5 fg:color_line_4)\
 $fill\
-[](bg:color_line_6 fg:color_line_5)\
-${custom.flox}\
-[](bg:color_line_7 fg:color_line_6)\
+[](bg:color_line_7 fg:color_line_5)\
 $fill\
 [](bg:color_line_6 fg:color_line_7)\
 [ ](bg:color_line_6)\
@@ -32,6 +30,7 @@ $username\
 $time\
 [](fg:color_line_11)\
 $line_break\
+${custom.flox}\
 $git_branch\
 $git_status\
 $git_state\
@@ -52,17 +51,17 @@ color_fg1 = '#000000'
 # Line 2: git components use normal background (no custom colors)
 # Gradient from dark blue-grey (#16222A) to steel teal (#3A6073)
 # Line 1 gradient: 11 steps from #16222a to #3a6073
-color_line_1 = '#16222a'   # Line 1: directory - step 1/11
-color_line_2 = '#1a2830'   # Line 1: jobs - step 2/11
-color_line_3 = '#1e2f36'   # Line 1: space1 - step 3/11
-color_line_4 = '#22353c'   # Line 1: space2 - step 4/11
-color_line_5 = '#263b42'   # Line 1: fill (left side) - step 5/11
-color_line_6 = '#2a4248'   # Line 1: flox (centered) + space3 - step 6/11
-color_line_7 = '#2e484e'   # Line 1: fill (right side) + space4 - step 7/11
-color_line_8 = '#324f54'   # Line 1: cloud services - step 8/11
-color_line_9 = '#36555a'   # Line 1: os - step 9/11
-color_line_10 = '#3a5c60'  # Line 1: username - step 10/11
-color_line_11 = '#3a6073'  # Line 1: time - step 11/11
+color_line_1 = '#16222a'  # Line 1: directory - step 1/11
+color_line_2 = '#1a2830'  # Line 1: jobs - step 2/11
+color_line_3 = '#1e2f36'  # Line 1: space1 - step 3/11
+color_line_4 = '#22353c'  # Line 1: space2 - step 4/11
+color_line_5 = '#263b42'  # Line 1: fill (left side) - step 5/11
+color_line_6 = '#2a4248'  # Line 1: flox (centered) + space3 - step 6/11
+color_line_7 = '#2e484e'  # Line 1: fill (right side) + space4 - step 7/11
+color_line_8 = '#324f54'  # Line 1: cloud services - step 8/11
+color_line_9 = '#36555a'  # Line 1: os - step 9/11
+color_line_10 = '#3a5c60' # Line 1: username - step 10/11
+color_line_11 = '#3a6073' # Line 1: time - step 11/11
 # Status colors
 color_green = '#98971a'
 color_red = '#cc241d'
@@ -151,12 +150,12 @@ format = "[$output]($style)"
 style = "fg:color_fg0"
 description = "Show git diff stats for working directory with colors"
 
-# Custom Flox Environment - Shows active flox environment name (centered in fill)
+# Custom Flox Environment - Shows active flox environment name on second line with white background and white text
 [custom.flox]
 command = """echo $FLOX_ENV_DESCRIPTION 2>/dev/null || echo $FLOX_ENV 2>/dev/null | sed 's|.*/||'"""
 when = "[ -n \"$FLOX_ENV\" ]"
-format = "[[\\[flox\\] $output](fg:color_fg0 bg:color_line_6)]($style)"
-style = "bg:color_line_6"
+format = "[[ \\[flox\\] $output ](fg:#ffffff bg:#000000)]($style)"
+style = "bg:#000000"
 description = "Show active flox environment"
 
 # Git Status - Comprehensive status indicators (like p10k's vcs-status)
