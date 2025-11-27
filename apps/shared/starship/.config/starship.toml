@@ -41,9 +41,8 @@ $os\
 [](bg:color_line_14 fg:color_line_13)\
 $username\
 [](bg:color_line_15 fg:color_line_14)\
-$time\
-[](fg:color_line_15)\
 $line_break\
+$time\
 $character"""
 
 right_format = ""
@@ -195,8 +194,8 @@ disabled = false
 [time]
 disabled = false
 time_format = "%F %T"
-style = "bg:color_line_15"
-format = '[[  $time ](fg:color_fg0 bg:color_line_15)]($style)'
+style = "fg:color_fg0"
+format = '[ $time ]($style)'
 
 [memory_usage]
 disabled = false
