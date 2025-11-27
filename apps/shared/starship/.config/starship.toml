@@ -53,24 +53,24 @@ palette = 'teal_gradient'
 [palettes.teal_gradient]
 color_fg0 = '#ffffff'
 color_fg1 = '#000000'
-# Dark Blue-Grey to Cyan gradient - Smooth progression for Line 1
-# Gradient from dark blue-grey (#2c3e50) to bright cyan/teal (#4ca1af)
-# Line 1 gradient: 15 steps from #2c3e50 to #4ca1af for smooth color transitions
-color_line_1 = '#2c3e50'  # Step 1/15 - Darkest blue-grey
-color_line_2 = '#2e4556'  # Step 2/15
-color_line_3 = '#304c5d'  # Step 3/15
-color_line_4 = '#325364'  # Step 4/15
-color_line_5 = '#355a6b'  # Step 5/15
-color_line_6 = '#376171'  # Step 6/15
-color_line_7 = '#396878'  # Step 7/15
-color_line_8 = '#3c6f7f'  # Step 8/15 - Middle
-color_line_9 = '#3e7686'  # Step 9/15
-color_line_10 = '#407d8d' # Step 10/15
-color_line_11 = '#428493' # Step 11/15
-color_line_12 = '#458b9a' # Step 12/15
-color_line_13 = '#4792a1' # Step 13/15
-color_line_14 = '#4999a8' # Step 14/15
-color_line_15 = '#4ca1af' # Step 15/15 - Brightest cyan/teal
+# Dark Teal gradient - Smooth progression
+# Gradient from very dark teal (#003135) to medium teal (#2d7a6e)
+# 15 steps from #003135 to #2d7a6e for smooth color transitions
+color_line_1 = '#003135'  # Step 1/15 - Darkest teal
+color_line_2 = '#033639'  # Step 2/15
+color_line_3 = '#063b3d'  # Step 3/15
+color_line_4 = '#094041'  # Step 4/15
+color_line_5 = '#0c4545'  # Step 5/15
+color_line_6 = '#104b49'  # Step 6/15
+color_line_7 = '#13504d'  # Step 7/15
+color_line_8 = '#165551'  # Step 8/15 - Middle
+color_line_9 = '#195a55'  # Step 9/15
+color_line_10 = '#1c5f59' # Step 10/15
+color_line_11 = '#20655d' # Step 11/15
+color_line_12 = '#236a61' # Step 12/15
+color_line_13 = '#266f65' # Step 13/15
+color_line_14 = '#297469' # Step 14/15
+color_line_15 = '#2d7a6e' # Step 15/15 - Medium teal
 # Status colors
 color_green = '#98971a'
 color_red = '#cc241d'
