@@ -14,25 +14,25 @@ $directory\
 [](bg:color_line_2 fg:color_line_1)\
 $jobs\
 [](bg:color_line_3 fg:color_line_2)\
-[ ](bg:color_line_3)\
+[  ](bg:color_line_3)\
 [](bg:color_line_4 fg:color_line_3)\
-[ ](bg:color_line_4)\
+[  ](bg:color_line_4)\
 [](bg:color_line_5 fg:color_line_4)\
-[ ](bg:color_line_5)\
+[  ](bg:color_line_5)\
 [](bg:color_line_6 fg:color_line_5)\
-[ ](bg:color_line_6)\
+[  ](bg:color_line_6)\
 [](bg:color_line_7 fg:color_line_6)\
-[ ](bg:color_line_7)\
+[  ](bg:color_line_7)\
 [](bg:color_line_8 fg:color_line_7)\
 $fill\
 [](bg:color_line_9 fg:color_line_8)\
-[ ](bg:color_line_9)\
+[  ](bg:color_line_9)\
 [](bg:color_line_10 fg:color_line_9)\
-[ ](bg:color_line_10)\
+[  ](bg:color_line_10)\
 [](bg:color_line_11 fg:color_line_10)\
-[ ](bg:color_line_11)\
+[  ](bg:color_line_11)\
 [](bg:color_line_12 fg:color_line_11)\
-[ ](bg:color_line_12)\
+[  ](bg:color_line_12)\
 $docker_context\
 $kubernetes\
 $aws\
