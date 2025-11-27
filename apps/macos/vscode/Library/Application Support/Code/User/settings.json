@@ -1,0 +1,9 @@
+{
+  "workbench.colorTheme": "Monokai",
+  "explorer.confirmDragAndDrop": false,
+  "explorer.confirmDelete": false,
+  "github.copilot.nextEditSuggestions.enabled": true,
+  "editor.indentSize": 2,
+  "editor.tabSize": 2,
+  "editor.formatOnSave": true,
+}
