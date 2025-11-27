@@ -11,24 +11,31 @@ $jobs\
 [](bg:color_line_4 fg:color_line_3)\
 [ ](bg:color_line_4)\
 [](bg:color_line_5 fg:color_line_4)\
-$fill\
-[](bg:color_line_7 fg:color_line_5)\
-$fill\
-[](bg:color_line_6 fg:color_line_7)\
+[ ](bg:color_line_5)\
+[](bg:color_line_6 fg:color_line_5)\
 [ ](bg:color_line_6)\
 [](bg:color_line_7 fg:color_line_6)\
 [ ](bg:color_line_7)\
 [](bg:color_line_8 fg:color_line_7)\
+$fill\
+[](bg:color_line_9 fg:color_line_8)\
+[ ](bg:color_line_9)\
+[](bg:color_line_10 fg:color_line_9)\
+[ ](bg:color_line_10)\
+[](bg:color_line_11 fg:color_line_10)\
+[ ](bg:color_line_11)\
+[](bg:color_line_12 fg:color_line_11)\
+[ ](bg:color_line_12)\
 $docker_context\
 $kubernetes\
 $aws\
-[](bg:color_line_9 fg:color_line_8)\
+[](bg:color_line_13 fg:color_line_12)\
 $os\
-[](bg:color_line_10 fg:color_line_9)\
+[](bg:color_line_14 fg:color_line_13)\
 $username\
-[](bg:color_line_11 fg:color_line_10)\
+[](bg:color_line_15 fg:color_line_14)\
 $time\
-[](fg:color_line_11)\
+[](fg:color_line_15)\
 $line_break\
 ${custom.flox}\
 $git_branch\
@@ -46,22 +53,24 @@ palette = 'teal_gradient'
 [palettes.teal_gradient]
 color_fg0 = '#ffffff'
 color_fg1 = '#000000'
-# Dark Blue to Teal gradient - Smooth progression for Line 1
-# Line 1: directory → jobs → space1 → space2 → fill → flox → fill → space3 → space4 → cloud → os → username → time
-# Line 2: git components use normal background (no custom colors)
-# Gradient from dark blue-grey (#16222A) to steel teal (#3A6073)
-# Line 1 gradient: 11 steps from #16222a to #3a6073
-color_line_1 = '#16222a'  # Line 1: directory - step 1/11
-color_line_2 = '#1a2830'  # Line 1: jobs - step 2/11
-color_line_3 = '#1e2f36'  # Line 1: space1 - step 3/11
-color_line_4 = '#22353c'  # Line 1: space2 - step 4/11
-color_line_5 = '#263b42'  # Line 1: fill (left side) - step 5/11
-color_line_6 = '#2a4248'  # Line 1: flox (centered) + space3 - step 6/11
-color_line_7 = '#2e484e'  # Line 1: fill (right side) + space4 - step 7/11
-color_line_8 = '#324f54'  # Line 1: cloud services - step 8/11
-color_line_9 = '#36555a'  # Line 1: os - step 9/11
-color_line_10 = '#3a5c60' # Line 1: username - step 10/11
-color_line_11 = '#3a6073' # Line 1: time - step 11/11
+# Dark Blue-Grey to Cyan gradient - Smooth progression for Line 1
+# Gradient from dark blue-grey (#2c3e50) to bright cyan/teal (#4ca1af)
+# Line 1 gradient: 15 steps from #2c3e50 to #4ca1af for smooth color transitions
+color_line_1 = '#2c3e50'  # Step 1/15 - Darkest blue-grey
+color_line_2 = '#2e4556'  # Step 2/15
+color_line_3 = '#304c5d'  # Step 3/15
+color_line_4 = '#325364'  # Step 4/15
+color_line_5 = '#355a6b'  # Step 5/15
+color_line_6 = '#376171'  # Step 6/15
+color_line_7 = '#396878'  # Step 7/15
+color_line_8 = '#3c6f7f'  # Step 8/15 - Middle
+color_line_9 = '#3e7686'  # Step 9/15
+color_line_10 = '#407d8d' # Step 10/15
+color_line_11 = '#428493' # Step 11/15
+color_line_12 = '#458b9a' # Step 12/15
+color_line_13 = '#4792a1' # Step 13/15
+color_line_14 = '#4999a8' # Step 14/15
+color_line_15 = '#4ca1af' # Step 15/15 - Brightest cyan/teal
 # Status colors
 color_green = '#98971a'
 color_red = '#cc241d'
@@ -70,8 +79,8 @@ color_purple = '#b16286'
 
 [os]
 disabled = false
-style = "bg:color_line_9"
-format = '[[ $symbol](fg:color_fg0 bg:color_line_9)]($style)'
+style = "bg:color_line_13"
+format = '[[ $symbol](fg:color_fg0 bg:color_line_13)]($style)'
 
 [os.symbols]
 Windows = "󰍲"
@@ -96,9 +105,9 @@ RedHatEnterprise = "󱄛"
 
 [username]
 disabled = false
-style_user = "bg:color_line_10"
-style_root = "bg:color_line_10"
-format = '[[ $user](fg:color_fg0 bg:color_line_10)]($style)'
+style_user = "bg:color_line_14"
+style_root = "bg:color_line_14"
+format = '[[ $user](fg:color_fg0 bg:color_line_14)]($style)'
 show_always = true
 
 [directory]
@@ -186,13 +195,13 @@ disabled = false
 [time]
 disabled = false
 time_format = "%F %T"
-style = "bg:color_line_11"
-format = '[[  $time ](fg:color_fg0 bg:color_line_11)]($style)'
+style = "bg:color_line_15"
+format = '[[  $time ](fg:color_fg0 bg:color_line_15)]($style)'
 
 [memory_usage]
 disabled = false
 threshold = -1
-style = "bg:color_line_11 fg:color_fg0"
+style = "bg:color_line_15 fg:color_fg0"
 format = '[ $ram]($style)'
 
 [jobs]
@@ -202,22 +211,22 @@ format = '[ $number]($style)'
 
 [docker_context]
 disabled = false
-style = "bg:color_line_8 fg:color_fg0"
+style = "bg:color_line_12 fg:color_fg0"
 format = '[ $symbol$context]($style)'
 
 [kubernetes]
 disabled = false
-style = "bg:color_line_8 fg:color_fg0"
+style = "bg:color_line_12 fg:color_fg0"
 format = '[ $symbol$context]($style)'
 
 [aws]
 disabled = false
-style = "bg:color_line_8 fg:color_fg0"
+style = "bg:color_line_12 fg:color_fg0"
 format = '[ $symbol$profile]($style)'
 
 [fill]
 symbol = " "
-style = "bg:color_line_5"
+style = "bg:color_line_8"
 
 [line_break]
 disabled = false
