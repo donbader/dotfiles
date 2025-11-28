@@ -101,6 +101,61 @@ Every review should be a learning opportunity that improves developer skills.
 
 ## Core Principles
 
+### 0. Confidence-Based Severity (NEW)
+
+**Critical principle**: Severity should match confidence level. Avoid flagging uncertain issues as Critical.
+
+**Severity Guidelines**:
+
+| Severity | Confidence | When to Use | Example |
+|----------|-----------|-------------|---------|
+| 🚨 **Critical** | >90% | Pattern is demonstrably dangerous AND not common in codebase AND no explanatory context | SQL injection with string concatenation, no similar code elsewhere |
+| ⚠️ **Important** | 60-90% | Likely issue BUT pattern exists elsewhere OR PR mentions constraints OR missing context | State update on error, but appears in 5+ files |
+| 💡 **Suggestion** | 40-60% | Potential improvement BUT pattern is common (intentional) OR author has comment needing clarity | Pattern in 10+ files, suggest clarifying comment |
+| ❓ **Question** | <40% | Unclear if bug or design choice, need author to explain | Can't determine if pattern is intentional without system knowledge |
+
+**Decision Tree for Severity**:
+
+```
+Found potentially dangerous pattern
+  ↓
+Does it appear in 5+ similar files in codebase?
+  YES → 💡 Suggestion (likely intentional pattern)
+  NO  ↓
+     
+Is there an explanatory comment nearby (within 5 lines)?
+  YES → 💡 Suggestion or ❓ Question (author aware, needs clarity)
+  NO  ↓
+     
+Does PR description mention constraints/trade-offs?
+  YES → ⚠️ Important (frame as question acknowledging context)
+  NO  ↓
+     
+Is this a well-known anti-pattern (SQL injection, XSS, etc.)?
+  YES → 🚨 Critical (high confidence it's wrong)
+  NO  → ⚠️ Important or ❓ Question (medium/low confidence)
+```
+
+**Examples of Severity Adjustment**:
+
+```markdown
+# Pattern: State update without checking error
+
+BEFORE Context Gathering:
+  🚨 Critical - State update on cache failure causes split-brain
+
+AFTER discovering pattern in 7 other files:
+  💡 Suggestion - Add comment explaining why this pattern is used
+  
+AFTER finding PR mentions "RPC not replayable":
+  ❓ Question - Is current approach needed because RPC is one-time stream?
+  
+AFTER finding NO similar patterns and NO context:
+  ⚠️ Important - Please verify: state update on error might cause issues
+```
+
+**Key Rule**: When in doubt, downgrade severity and ask questions. Better to be collaborative than confrontational.
+
 ### 1. Stay Within Scope
 
 **Inline comments** - Only for code changes in this PR:
@@ -386,7 +441,144 @@ echo "=== PR_DIFF ===" && gh pr diff $pr_number
 - **Captures current commit** to compare against last review
 - Uses correct repo info format for API calls
 
-### Phase 3: Analyze PR Context
+### Phase 3: Gather Context (Solution 3 & 7)
+
+Before analyzing code, gather context to avoid false positives on Critical issues.
+
+**Step 1: Search for Historical Context**
+
+For better-informed reviews, search for related discussions and past decisions:
+
+```bash
+# Get repository info
+repo_info=$(gh repo view --json owner,name -q '.owner.login + "/" + .name')
+
+# Extract key terms from changed files for searching
+changed_files=$(gh pr view $pr_number --json files -q '.files[].path')
+search_terms=$(echo "$changed_files" | xargs basename -a | sed 's/\.[^.]*$//' | head -3)
+
+echo "=== SEARCHING FOR HISTORICAL CONTEXT ==="
+
+# Search for related issues (limit to prevent noise)
+for term in $search_terms; do
+  echo "--- Issues related to: $term ---"
+  gh issue list --repo "$repo_info" --search "$term" --limit 3 --json number,title,url \
+    --jq '.[] | "  #\(.number): \(.title)\n  \(.url)"' 2>/dev/null || true
+done
+
+# Search for related PRs (especially useful for understanding patterns)
+echo "--- Related PRs ---"
+for term in $search_terms; do
+  gh pr list --repo "$repo_info" --search "$term" --state all --limit 3 \
+    --json number,title,url,state \
+    --jq '.[] | "  #\(.number) [\(.state)]: \(.title)\n  \(.url)"' 2>/dev/null || true
+done
+
+# Search for code comments explaining trade-offs
+echo "=== CODE COMMENTS AND NOTES ==="
+for file in $changed_files; do
+  if [ -f "$file" ]; then
+    echo "--- Comments in: $file ---"
+    rg "TODO|FIXME|NOTE|HACK|WARNING|IMPORTANT" "$file" --context 1 || true
+  fi
+done
+```
+
+**Step 2: Analyze Codebase Patterns**
+
+Understand how THIS codebase handles similar scenarios:
+
+```bash
+echo "=== ANALYZING CODEBASE PATTERNS ==="
+
+# For each changed file, find similar files in same directory
+for file in $changed_files; do
+  file_dir=$(dirname "$file")
+  file_base=$(basename "$file" | sed 's/\.[^.]*$//')
+  
+  echo "--- Patterns in directory: $file_dir ---"
+  
+  # Common pattern searches based on file type
+  if [[ "$file" == *.go ]]; then
+    # Go-specific patterns
+    echo "Error handling patterns:"
+    rg "if err != nil" "$file_dir" --context 2 | head -20 || true
+    
+    echo "Cache/database write patterns:"
+    rg "cache\\.Set|db\\.Write|\.Save\(" "$file_dir" --context 3 | head -20 || true
+    
+  elif [[ "$file" == *.ts ]] || [[ "$file" == *.js ]]; then
+    # TypeScript/JavaScript patterns
+    echo "Error handling patterns:"
+    rg "catch|\.then\(.*,.*\)|try" "$file_dir" --context 2 | head -20 || true
+    
+  elif [[ "$file" == *.py ]]; then
+    # Python patterns
+    echo "Error handling patterns:"
+    rg "except|try:" "$file_dir" --context 2 | head -20 || true
+  fi
+  
+  # Find similar filenames (e.g., other subscription handlers)
+  echo "Similar files in directory:"
+  ls -1 "$file_dir" | rg "$(echo $file_base | sed 's/_recording//' | sed 's/_subscription//')" || true
+done
+```
+
+**Step 3: Extract PR Context Clues**
+
+Parse the PR description for constraints and known trade-offs:
+
+```bash
+echo "=== PR DESCRIPTION ANALYSIS ==="
+
+pr_body=$(gh pr view $pr_number --json body -q '.body')
+
+# Look for constraint indicators
+echo "Detected constraints:"
+echo "$pr_body" | rg -i "out of order|race condition|async|eventual|best effort|known issue" --context 1 || echo "  None detected"
+
+# Look for scope indicators
+echo "Detected scope:"
+echo "$pr_body" | rg -i "hotfix|quick fix|part \d of|follow.?up|separate PR|future work" --context 1 || echo "  Standard PR"
+
+# Look for referenced issues/tickets
+echo "Referenced issues:"
+echo "$pr_body" | rg -o "[A-Z]+-\d+|#\d+" | sort -u || echo "  None referenced"
+
+# Look for testing mentions
+echo "Testing approach:"
+echo "$pr_body" | rg -i "test|tested|testing" --context 1 || echo "  Not mentioned"
+```
+
+**Step 4: Build Context Summary**
+
+Create a summary to inform review severity:
+
+```bash
+echo "=== CONTEXT SUMMARY FOR REVIEW ==="
+echo "Repository patterns:"
+echo "  - Check output above for how this codebase handles errors, cache writes, etc."
+echo "PR constraints:"
+echo "  - Check PR description for 'out of order', 'hotfix', 'separate PR', etc."
+echo "Historical decisions:"
+echo "  - Check related PRs/issues for past discussions on similar topics"
+echo ""
+echo "Use this context to:"
+echo "  🚨 Critical → Only for high-confidence bugs given the context"
+echo "  ⚠️ Important → For potential issues that might be intentional"
+echo "  💡 Suggestion → When pattern differs from typical but matches codebase"
+echo "  ❓ Question → When missing context to determine if issue or intentional"
+```
+
+**Key Decision Rules After Context Gathering:**
+
+1. **If pattern exists in 3+ similar files** → Likely intentional, downgrade severity
+2. **If PR description mentions constraint** (e.g., "out of order") → Frame as question
+3. **If related PR/issue discusses same topic** → Reference it, avoid re-litigating
+4. **If code has explanatory comment** → Acknowledge it, might just need clarification
+5. **If hotfix/quick fix** → Focus on correctness over architecture
+
+### Phase 4: Analyze PR Context
 
 **Determine review mode**:
 
@@ -570,12 +762,206 @@ threads_with_replies=$(gh api "repos/${repo}/pulls/${pr}/comments" | \
   jq 'select(.in_reply_to_id != null)')  # ❌ DON'T DO THIS
 ```
 
-### Phase 5: Apply Comment Filters
+### Phase 5: Two-Pass Review Strategy (Solution 7)
+
+Use a two-pass approach to reduce false positives on critical issues.
+
+**Pass 1: Pattern Detection (Automated Scan)**
+
+First, scan for high-risk patterns without context:
+
+```bash
+echo "=== PASS 1: PATTERN DETECTION ==="
+
+# Define dangerous patterns to scan for
+declare -A patterns=(
+  # Security patterns
+  ["sql_injection"]="SELECT.*FROM.*\+|query.*=.*\+.*WHERE|db\\.exec.*%s|string concatenation in SQL"
+  ["xss"]="dangerouslySetInnerHTML|innerHTML.*=|eval\(|new Function\("
+  ["auth_bypass"]="if.*==.*admin|auth.*=.*true|skip.*auth"
+  
+  # Correctness patterns
+  ["state_without_error_check"]="if err != nil.*\n.*}\n.*state.*=|cache\\.Set.*err.*\n.*state\\.update"
+  ["null_deref"]="\\[.*\\](?!.*if.*!=.*nil)|\\.(.*?)(?!.*if.*!=.*nil)"
+  
+  # Performance patterns  
+  ["n_plus_one"]="for.*range.*\n.*db\\.Query|map.*=>.*fetch|loop.*SELECT"
+  ["inefficient_loop"]="for.*for.*for"
+)
+
+# Scan changed files for patterns
+pr_diff=$(gh pr diff $pr_number)
+detected_patterns=()
+
+for pattern_name in "${!patterns[@]}"; do
+  pattern="${patterns[$pattern_name]}"
+  
+  if echo "$pr_diff" | rg -U "$pattern" > /dev/null 2>&1; then
+    echo "⚠️  Detected pattern: $pattern_name"
+    detected_patterns+=("$pattern_name")
+    
+    # Show where it was found
+    echo "$pr_diff" | rg -U "$pattern" --context 3 | head -20
+    echo ""
+  fi
+done
+
+if [ ${#detected_patterns[@]} -eq 0 ]; then
+  echo "✅ No high-risk patterns detected in Pass 1"
+fi
+```
+
+**Pass 2: Context-Aware Analysis (For Each Detected Pattern)**
+
+For each pattern found, gather context before determining severity:
+
+```bash
+echo "=== PASS 2: CONTEXT-AWARE ANALYSIS ==="
+
+for pattern_name in "${detected_patterns[@]}"; do
+  echo "--- Analyzing: $pattern_name ---"
+  
+  # Step 1: Find the file and line where pattern was detected
+  pattern="${patterns[$pattern_name]}"
+  locations=$(echo "$pr_diff" | rg -n "$pattern" --only-matching | head -5)
+  
+  for location in $locations; do
+    file=$(echo "$location" | cut -d: -f1)
+    line=$(echo "$location" | cut -d: -f2)
+    
+    echo "Location: $file:$line"
+    
+    # Step 2: Read surrounding code (±50 lines for full context)
+    echo "Code context:"
+    if [ -f "$file" ]; then
+      start_line=$((line - 20 > 0 ? line - 20 : 1))
+      end_line=$((line + 20))
+      sed -n "${start_line},${end_line}p" "$file" | cat -n
+    fi
+    
+    # Step 3: Search for similar patterns in codebase
+    echo "Checking if pattern exists elsewhere in codebase:"
+    file_dir=$(dirname "$file")
+    similar_count=$(rg "$pattern" "$file_dir" --count 2>/dev/null | wc -l | tr -d ' ')
+    echo "  Found in $similar_count files in $file_dir"
+    
+    if [ "$similar_count" -gt 3 ]; then
+      echo "  ⚠️  Pattern appears common in this codebase (${similar_count} files)"
+      echo "  Consider: Might be intentional - downgrade to ⚠️ Important or 💡 Suggestion"
+    fi
+    
+    # Step 4: Check for explanatory comments near the code
+    echo "Checking for explanatory comments:"
+    if [ -f "$file" ]; then
+      start_line=$((line - 5 > 0 ? line - 5 : 1))
+      end_line=$((line + 2))
+      comments=$(sed -n "${start_line},${end_line}p" "$file" | rg "//.*NOTE|//.*TODO|//.*HACK|//.*WARNING" || echo "None")
+      echo "  $comments"
+      
+      if [ "$comments" != "None" ]; then
+        echo "  ⚠️  Author has commented on this - likely aware of trade-off"
+        echo "  Consider: Frame as 💡 Suggestion to clarify comment, not 🚨 Critical"
+      fi
+    fi
+    
+    # Step 5: Check PR description for context
+    echo "Checking PR description for relevant context:"
+    pr_context=$(gh pr view $pr_number --json body -q '.body' | \
+      rg -i "constraint|trade.?off|known|intentional|hotfix|temporary" --context 1 || echo "None")
+    
+    if [ "$pr_context" != "None" ]; then
+      echo "  Found context in PR description:"
+      echo "$pr_context" | head -5
+      echo "  ⚠️  PR mentions constraints/trade-offs - pattern might be intentional"
+    fi
+    
+    # Step 6: Decision matrix based on gathered context
+    echo "Decision for $pattern_name at $file:$line:"
+    
+    # High confidence → Critical
+    if [ "$pattern_name" = "sql_injection" ] && [ "$similar_count" -lt 2 ] && [ "$comments" = "None" ]; then
+      echo "  → 🚨 CRITICAL: High-risk pattern, not common in codebase, no explanation"
+      
+    # Pattern exists in codebase → Important or Question
+    elif [ "$similar_count" -gt 3 ]; then
+      echo "  → ⚠️ IMPORTANT or 💡 SUGGESTION: Pattern common in codebase, might be standard"
+      echo "     Frame as: 'I noticed this pattern in ${similar_count} files. Is this intentional because...?'"
+      
+    # Author has comment → Question
+    elif [ "$comments" != "None" ]; then
+      echo "  → 💡 SUGGESTION: Author aware (has comment), ask for clarification"
+      echo "     Frame as: 'Could you clarify the comment at line X? Are you trading off Y for Z?'"
+      
+    # PR mentions trade-offs → Important with question
+    elif [ "$pr_context" != "None" ]; then
+      echo "  → ⚠️ IMPORTANT: PR mentions constraints, frame as question"
+      echo "     Frame as: 'Given the constraint mentioned in PR description, is this pattern needed?'"
+      
+    # Medium confidence → Important
+    else
+      echo "  → ⚠️ IMPORTANT: Potential issue but missing full context"
+      echo "     Frame as: 'Concern: ... However, I may be missing context: ...'"
+    fi
+    
+    echo ""
+  done
+done
+```
+
+**Pass 2 Output Summary:**
+
+After both passes, create a summary for the AI reviewer:
+
+```bash
+echo "=== REVIEW GUIDANCE FROM TWO-PASS ANALYSIS ==="
+echo ""
+echo "Patterns detected: ${#detected_patterns[@]}"
+echo ""
+echo "Severity recommendations based on context:"
+echo "  🚨 Critical → Only if: high-risk pattern + not common + no explanation + no PR context"
+echo "  ⚠️ Important → If: pattern exists elsewhere OR PR mentions constraints"  
+echo "  💡 Suggestion → If: author has comment OR pattern very common (5+ files)"
+echo "  ❓ Question → When: missing key context to determine severity"
+echo ""
+echo "Key findings to reference in review comments:"
+for pattern_name in "${detected_patterns[@]}"; do
+  echo "  - $pattern_name: [reference Pass 2 analysis above]"
+done
+```
+
+### Phase 6: Apply Comment Filters
 
 **Comment limits**:
 - First review: Max 7-10 meaningful comments
 - Re-review: Max 3 comments, only for NEW critical issues OR verification
 - Incremental review: Max 5 comments, focus on critical issues in new code only
+
+**Severity Decision Rules (After Pass 1 & 2):**
+
+1. **🚨 Critical** - Use ONLY when:
+   - High-risk pattern (security, data loss, breaking change)
+   - AND pattern is NOT common in codebase (<2 occurrences)
+   - AND no explanatory comment near code
+   - AND no relevant context in PR description
+   - **Confidence: >90%**
+
+2. **⚠️ Important** - Use when:
+   - Potential issue but pattern exists in 3+ files (might be standard)
+   - OR PR description mentions constraints/trade-offs
+   - OR seems wrong but missing full context
+   - **Confidence: 60-90%**
+
+3. **💡 Suggestion** - Use when:
+   - Pattern is common (5+ files) suggesting intentional
+   - OR author has explanatory comment (just needs clarity)
+   - OR optimization that might not matter
+   - **Confidence: 40-60%**
+
+4. **❓ Question** - Use when:
+   - Unclear if pattern is bug or intentional
+   - Missing critical context about system behavior
+   - Need author to clarify design decision
+   - **Confidence: <40%**
 
 **Re-review filter** - For each potential issue, ask:
 
@@ -1189,7 +1575,172 @@ View: [PR_URL]
 
 Every comment MUST end with `---\n*🤖 Generated by OpenCode*`
 
-### Security Issue (Critical)
+**Confidence-Based Commenting**: Use the appropriate template based on confidence level from Phase 5 (Two-Pass Review).
+
+### High Confidence Critical Issue (>90% confidence)
+
+Use ONLY when:
+- Pattern is demonstrably dangerous (security, data loss)
+- Pattern is NOT common in codebase (<2 occurrences)
+- No explanatory comments near code
+- No relevant context in PR description
+
+```markdown
+🚨 **Critical - Security**
+
+**Issue**: [e.g., SQL injection vulnerability]
+
+**Why critical**: [Security risk and attack vector]
+
+**Fix**:
+\`\`\`suggestion
+// Secure implementation
+const query = 'SELECT * FROM users WHERE id = ?';
+const result = await db.query(query, [userId]);
+\`\`\`
+
+**Learning**: [Security principle or best practice]
+
+**References**: [OWASP link or codebase example if relevant]
+
+---
+*🤖 Generated by OpenCode*
+```
+
+### Medium Confidence Important Issue (60-90% confidence)
+
+Use when:
+- Potential issue but pattern exists in 3+ similar files
+- OR PR description mentions constraints/trade-offs  
+- OR seems problematic but missing key context
+
+```markdown
+⚠️ **Important - Potential Correctness Issue** (Please verify)
+
+**Pattern observed**: [e.g., State updates even when cache write fails]
+
+**Standard concern**: [Why this is usually wrong]
+
+**However, I noticed**:
+- This pattern appears in 5 other files in this directory (e.g., `file1.go:89`, `file2.go:42`)
+- PR description mentions "out of order" blocks
+- [Other context from Phase 3 analysis]
+
+**Context I'm missing**:
+- [ ] Is the RPC stream replayable? (Affects whether this causes data loss)
+- [ ] What happens when Redis is down for >5 minutes?
+- [ ] Is there monitoring for cache write failures?
+
+**Possible solutions (depends on context)**:
+
+**Scenario A: If RPC is replayable**
+\`\`\`suggestion
+// Retry queue for failed cache writes
+if err != nil {
+    t.retryQueue = append(t.retryQueue, nextBlock)
+    break
+}
+\`\`\`
+
+**Scenario B: If RPC is one-time stream** (blocks won't replay)
+\`\`\`suggestion
+// Current approach is correct - just add explanatory comment:
+// NOTE: We update state even on cache failure because:
+// 1. RPC stream is not replayable (block won't come again)
+// 2. Keeping in pending causes memory leak
+// 3. System self-heals when Redis recovers
+if err != nil {
+    baasrollbar.Error(err)
+}
+t.lastConsecutive = nextBlock
+\`\`\`
+
+Could you clarify which scenario applies?
+
+**Learning**: When persistence and in-memory state interact, the correct pattern depends on whether the data source is replayable.
+
+---
+*🤖 Generated by OpenCode*
+```
+
+### Low Confidence Suggestion (40-60% confidence)
+
+Use when:
+- Pattern appears in 5+ files (likely intentional)
+- OR author has nearby comment but it could be clearer
+- OR optimization that might not matter
+
+```markdown
+💡 **Suggestion - Clarify Trade-off**
+
+**Observation**: State updates even when cache write fails (line 156).
+
+**Context**: I noticed this same pattern in 7 other subscription files in this directory:
+- `block_number_recording_subscription.go:89`
+- `solana_block_number_recording_subscription.go:127`
+- [others]
+
+This suggests it's an intentional design pattern for arkcrawler subscriptions.
+
+**Suggestion**: Add a comment explaining the trade-off for future reviewers:
+
+\`\`\`suggestion
+// NOTE: We update state even on cache failure because:
+// 1. RPC blocks arrive out-of-order and are not replayable (see STXSUP-2427)
+// 2. Keeping failed blocks in pending causes memory leak  
+// 3. Cache syncs with memory state on next successful write
+// 4. Temporary cache staleness is acceptable for this system
+err := cache.SetLastCrawledBlockNumber(ctx, nextBlock)
+if err != nil {
+    baasrollbar.Error(errors.Errorf("failed to record..."))
+}
+t.lastConsecutive = nextBlock
+delete(t.pending, nextBlock)
+\`\`\`
+
+**Why this helps**: Preserves the reasoning and prevents future reviewers from flagging this as a bug.
+
+---
+*🤖 Generated by OpenCode*
+```
+
+### Question (< 40% confidence)
+
+Use when:
+- Unclear if pattern is bug or intentional design
+- Missing critical context about system architecture
+- Need author to explain design decision
+
+```markdown
+❓ **Question - Design Decision**
+
+**Observation**: I noticed state is updated even when cache write fails (line 156).
+
+**Why I'm asking**: 
+In typical systems, this could cause split-brain where memory state diverges from persisted state. However, I see:
+- Your comment on line 133 says "Only update state after successful cache write"
+- But the code continues execution after error
+- Similar pattern exists in `block_number_recording_subscription.go:89`
+
+**Possible explanations**:
+1. **RPC stream is not replayable** → Must process block immediately despite cache failure
+2. **Self-healing system** → Cache syncs from memory on next successful write
+3. **Temporary inconsistency acceptable** → Liveness prioritized over consistency
+
+Could you clarify:
+- Is the RPC stream replayable?
+- How does the system recover when Redis is down?
+- Is there a specific reason this pattern is used across subscriptions?
+
+Understanding this will help me provide better recommendations!
+
+---
+*🤖 Generated by OpenCode*
+```
+
+### Security Issue (Critical - High Confidence)
+
+**Use ONLY for clear security vulnerabilities with no valid use case**
 
 ```markdown
 🚨 **Critical - Security**
@@ -1450,6 +2001,88 @@ A successful review meets these requirements:
 - ➡️ Result: Post verification summary comment indicating ready for human approval
 - ❌ If ANY issues remain (old or new): DO NOT post summary, leave threads unresolved
 
+### Context-Aware Reviewing (NEW)
+- ✅ **Phase 3**: Gathered historical context from issues/PRs and code patterns
+- ✅ **Phase 5**: Used two-pass review (pattern detection → context analysis)
+- ✅ **Confidence levels**: Matched severity to confidence (>90% for Critical)
+- ✅ **Pattern awareness**: Checked if "issue" appears in 3+ similar files (likely intentional)
+- ✅ **Comment awareness**: Checked for explanatory comments near flagged code
+- ✅ **PR context**: Used description constraints to frame questions, not directives
+- ✅ **Humble framing**: Used "However, I may be missing context" for medium-confidence issues
+- ✅ **Question template**: Used ❓ Question when confidence <40%
+
 ---
 
-**Remember**: Every review is a teaching opportunity. Help developers grow their skills, not just improve one PR.
+## Summary of Improvements (Solutions 3 & 7)
+
+This review workflow now includes two major enhancements to reduce false positives and author disagreements:
+
+### Solution 3: Historical Context Search
+
+**What it does:**
+- Searches related GitHub issues/PRs before flagging Critical issues
+- Checks for explanatory comments (TODO, NOTE, HACK) in the code
+- Analyzes patterns in similar files (same directory)
+- Extracts constraints from PR description
+
+**Why it matters:**
+- Prevents re-litigating already-settled design decisions
+- Discovers that "bugs" are actually intentional patterns used throughout codebase
+- Frames comments with awareness of past discussions and trade-offs
+
+**Example:**
+```
+Before: 🚨 Critical - State update on cache failure causes data loss
+After:  💡 Suggestion - Add comment explaining why this pattern is used (found in 7 similar files)
+```
+
+### Solution 7: Two-Pass Review Strategy
+
+**What it does:**
+- **Pass 1**: Automated scan for dangerous patterns (SQL injection, XSS, null deref, etc.)
+- **Pass 2**: For each pattern, gather context before deciding severity:
+  - Read surrounding code (±50 lines)
+  - Check if pattern appears in 3+ other files
+  - Look for explanatory comments
+  - Review PR description for relevant constraints
+  - Apply decision matrix to determine confidence level
+
+**Why it matters:**
+- Prevents flagging intentional patterns as bugs
+- Adjusts severity based on how common pattern is in codebase
+- Acknowledges when missing context rather than asserting wrong assumptions
+
+**Decision Matrix:**
+```
+Pattern found → Appears in 5+ files? → 💡 Suggestion (likely intentional)
+              → Has comment nearby? → ❓ Question (clarify comment)
+              → PR mentions constraint? → ⚠️ Important (acknowledge context)
+              → None of above? → 🚨 Critical (high confidence)
+```
+
+### Key Behavioral Changes
+
+**Before improvements:**
+- 🚨 Critical issues based on "typical" best practices
+- Assertions without acknowledging missing context
+- Re-flagging patterns that are standard in that codebase
+
+**After improvements:**
+- 🚨 Critical only when >90% confident AND pattern uncommon
+- ⚠️ Important or ❓ Question when missing context
+- "However, I may be missing context: ..." framing
+- References to similar code: "I noticed this pattern in 7 files..."
+- Multiple solution scenarios: "If X, then Y; if Z, then W"
+
+### Success Metrics
+
+A successful context-aware review:
+- ✅ No false-positive Critical issues (author doesn't disagree on security/correctness)
+- ✅ Questions acknowledged as questions, not bugs dressed as questions
+- ✅ Patterns common in codebase get Suggestions (add comments), not Critical flags
+- ✅ Medium-confidence issues explicitly say "However, I may be missing context..."
+- ✅ References historical discussions when available (GitHub issue/PR links)
+
+---
+
+**Remember**: Every review is a teaching opportunity. Help developers grow their skills, not just improve one PR. When uncertain, ask questions rather than make assertions.
