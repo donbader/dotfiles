@@ -17,7 +17,7 @@ Perform thorough, context-aware, educational code reviews that help developers l
 /git:review-pr-v2
 ```
 
-**Priority**: Explicit PR URL takes precedence over auto-detection.
+When a PR URL is provided as an argument, use that URL exclusively. Otherwise, auto-detect the PR for the current branch.
 
 ## Review Modes
 

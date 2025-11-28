@@ -1,66 +1,73 @@
-# Phase 1: Setup Worktree
+# Phase 1: Determine PR and Setup Environment
 
-**IMPORTANT**: When reviewing a PR from a URL (not current branch), use git worktree to avoid disrupting user's work.
+## Parse Command Arguments
 
-**CRITICAL**: Always create worktree from `origin/$branch` to ensure latest remote state, not stale local references.
+Check if user provided a PR URL argument:
 
 ```bash
-# Determine if we need a worktree
+# Check for PR URL argument (anything after the command)
 if [ -n "$1" ]; then
-  # PR URL provided - extract PR number
-  pr_number=$(echo "$1" | grep -oE '[0-9]+$')
+  # User provided URL: /git:review-pr-v2 https://github.com/owner/repo/pull/123
+  pr_url="$1"
+  pr_number=$(echo "$pr_url" | grep -oE '[0-9]+$')
   use_worktree=true
-  echo "=== Using PR from URL - will create worktree ==="
+  echo "Using provided PR URL: $pr_url"
 else
-  # Use current branch
-  pr_number=$(gh pr view --json number -q .number 2>/dev/null)
+  # No URL provided: /git:review-pr-v2
+  # Auto-detect PR for current branch
+  pr_data=$(gh pr view --json url,number -q '{url: .url, number: .number}' 2>&1)
+  
+  if echo "$pr_data" | grep -q "no pull requests found"; then
+    echo "Error: No PR found for current branch"
+    echo ""
+    echo "Please either:"
+    echo "  1. Provide a PR URL: /git:review-pr-v2 https://github.com/owner/repo/pull/123"
+    echo "  2. Create a PR for this branch: gh pr create"
+    exit 1
+  fi
+  
+  pr_url=$(echo "$pr_data" | jq -r .url)
+  pr_number=$(echo "$pr_data" | jq -r .number)
   use_worktree=false
+  echo "Auto-detected PR for current branch: $pr_url"
 fi
+```
 
-if [ -z "$pr_number" ]; then 
-  echo "ERROR: No PR found. Provide URL or ensure current branch has a PR."
-  exit 1
-fi
+## Setup Worktree (if needed)
 
-# Setup worktree if needed
+When reviewing a PR from a URL (not current branch), create a worktree to avoid disrupting user's work:
+
+```bash
 if [ "$use_worktree" = true ]; then
-  # Get PR metadata including base branch (don't assume main/master)
+  # Get PR metadata including base branch
   pr_info=$(gh pr view $pr_number --json headRefName,baseRefName)
   pr_branch=$(echo "$pr_info" | jq -r .headRefName)
   base_branch=$(echo "$pr_info" | jq -r .baseRefName)
   
-  # Get git repository root and create worktree directory
+  # Get git repository root
   repo_root=$(git rev-parse --show-toplevel)
   worktree_dir="${repo_root}/.worktree/pr-review-${pr_number}"
   
-  # Create .worktree directory if it doesn't exist
+  # Create .worktree directory
   mkdir -p "${repo_root}/.worktree"
   
-  # CRITICAL: Fetch latest from remote to avoid stale state
-  echo "=== Fetching latest changes from origin/$pr_branch ==="
+  # Fetch latest from remote (avoid stale state)
+  echo "Fetching latest changes from origin/$pr_branch"
   git fetch origin "$pr_branch"
   
-  # Create worktree from remote branch reference (not local)
-  # This ensures we get the absolute latest commit from remote
+  # Create worktree from remote branch (ensures latest commit)
   git worktree add "$worktree_dir" "origin/$pr_branch"
   
   # Change to worktree directory
   cd "$worktree_dir"
   
-  # Verify we're on the latest commit
-  latest_commit=$(git log -1 --oneline)
-  echo "=== Created worktree at $worktree_dir ==="
-  echo "=== Current commit: $latest_commit ==="
-  echo "=== Base branch: $base_branch ==="
-  
-  # Sanity check: verify no newer commits on remote
-  git fetch origin "$pr_branch" 2>/dev/null
-  newer_commits=$(git log HEAD..origin/$pr_branch --oneline)
-  if [ -n "$newer_commits" ]; then
-    echo "⚠️  WARNING: Remote has newer commits than worktree!"
-    echo "$newer_commits"
-    echo "=== Resetting to latest remote commit ==="
-    git reset --hard "origin/$pr_branch"
-  fi
+  echo "Created worktree at $worktree_dir"
+  echo "Current commit: $(git log -1 --oneline)"
+  echo "Base branch: $base_branch"
+else
+  # Using current branch - get base branch for context
+  base_branch=$(gh pr view $pr_number --json baseRefName -q .baseRefName)
+  echo "Reviewing current branch (no worktree needed)"
+  echo "Base branch: $base_branch"
 fi
 ```

@@ -1,5 +1,21 @@
 # Workflow Overview
 
+## Step 0: Determine PR to Review
+
+Parse the user's command to determine which PR to review:
+
+- **If user provides URL**: `/git:review-pr-v2 https://github.com/owner/repo/pull/123`
+  - Extract PR URL from the argument
+  - Use this URL for all subsequent operations
+  - Create a worktree for this PR
+  
+- **If no URL provided**: `/git:review-pr-v2`
+  - Auto-detect PR for current branch: `gh pr view --json url,number -q .`
+  - If no PR found, exit with error asking user to provide URL or create PR
+  - Use current working directory (no worktree needed)
+
+Proceed to Phase 1 with the determined PR URL/number.
+
 ## First Review
 1. **Setup**: Create worktree (if URL provided) or use current branch
 2. **Fetch**: Get PR metadata, diff, and changed files

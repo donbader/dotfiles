@@ -1,9 +1,9 @@
 # Phase 2: Fetch PR Information
 
-**Single bash command** to fetch all required data:
+Now that we have `$pr_number` and `$base_branch` from Phase 1, fetch all PR data:
 
 ```bash
-# Get repository info for API calls
+# Get repository info for GraphQL API calls
 repo_info=$(gh repo view --json owner,name -q '.owner.login + "/" + .name')
 owner=$(echo "$repo_info" | cut -d'/' -f1)
 repo=$(echo "$repo_info" | cut -d'/' -f2)
