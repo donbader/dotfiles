@@ -59,14 +59,95 @@ For each task, identify:
 - **Outputs**: What does this task produce that others might need?
 - **Conflicts**: Does this task modify resources that other tasks use?
 
-### Step 3: Create Execution Batches
+### Step 3: Create Task Delegation Plan
+
+**IMPORTANT**: Before executing any tasks, you MUST create an explicit delegation plan that:
+
+1. **Lists all tasks to be delegated** - Enumerate each discrete task that will be assigned to a sub-agent
+2. **Identifies the agent type** for each task (use 'general' subagent_type for most tasks)
+3. **Describes what each task should accomplish** - Be specific about expected outputs
+4. **Groups tasks into execution batches** - Clearly show which tasks run in parallel vs. sequentially
+
+**Present this plan to the user** using this format with explicit Task tool invocations:
+
+```
+## Task Delegation Plan
+
+### Batch 1 (Parallel Execution)
+I will invoke the Task tool with the following calls in a single message:
+
+1. Task(
+     subagent_type: "general",
+     description: "[3-5 word description]",
+     prompt: "[Detailed self-contained prompt with all context needed]"
+   )
+   Expected output: [What this task should return]
+
+2. Task(
+     subagent_type: "general",
+     description: "[3-5 word description]",
+     prompt: "[Detailed self-contained prompt with all context needed]"
+   )
+   Expected output: [What this task should return]
+
+3. Task(
+     subagent_type: "general",
+     description: "[3-5 word description]",
+     prompt: "[Detailed self-contained prompt with all context needed]"
+   )
+   Expected output: [What this task should return]
+
+### Batch 2 (Sequential - waits for Batch 1 to complete)
+
+4. Task(
+     subagent_type: "general",
+     description: "[3-5 word description]",
+     prompt: "[Detailed prompt using results from Batch 1]"
+   )
+   Expected output: [What this task should return]
+
+### Batch 3 (Parallel Execution - waits for Batch 2 to complete)
+
+5. Task(
+     subagent_type: "general",
+     description: "[3-5 word description]",
+     prompt: "[Detailed self-contained prompt]"
+   )
+   Expected output: [What this task should return]
+
+6. Task(
+     subagent_type: "general",
+     description: "[3-5 word description]",
+     prompt: "[Detailed self-contained prompt]"
+   )
+   Expected output: [What this task should return]
+```
+
+**Key requirements for each Task invocation:**
+- **description**: Short 3-5 word summary (e.g., "Search authentication code", "Update API configuration")
+- **prompt**: Detailed, self-contained instructions that include:
+  - All necessary context for the task
+  - Specific files, directories, or patterns to work with
+  - Exact actions to perform
+  - What information to return
+  - Any constraints or requirements
+- **subagent_type**: Use "general" for most tasks
+
+This planning phase ensures:
+- The user understands what will happen before execution begins
+- Dependencies are clearly identified and communicated
+- The delegation strategy is transparent and can be adjusted if needed
+- You have a clear roadmap to follow during execution
+- Each Task tool call is properly structured with all required parameters
+
+### Step 4: Create Execution Batches
 
 Group tasks into sequential batches where:
 - All tasks within a batch are independent of each other (run in parallel)
 - Batches execute sequentially based on dependencies
 - Each batch completes before the next begins
 
-### Step 4: Execute Batches
+### Step 5: Execute Batches
 
 For each batch:
 1. Launch all tasks in the batch using multiple Task tool calls in a **single message**
@@ -246,13 +327,14 @@ When parallel tasks execute:
 
 ## Best Practices
 
-1. **Always analyze before acting**: Take time to understand dependencies
-2. **Be explicit about strategy**: Tell the user your execution plan
-3. **Use clear descriptions**: Task descriptions should explain what each does
-4. **Verify independence**: Double-check that parallel tasks truly don't conflict
-5. **Communicate progress**: Update user as batches complete
-6. **Handle failures gracefully**: Have a plan for when tasks fail
-7. **Optimize for speed**: Maximize parallelism where safe to do so
+1. **Always plan before executing**: Create a clear task delegation plan and present it to the user
+2. **Always analyze before acting**: Take time to understand dependencies
+3. **Be explicit about strategy**: Tell the user your execution plan with clear batching
+4. **Use clear descriptions**: Task descriptions should explain what each does
+5. **Verify independence**: Double-check that parallel tasks truly don't conflict
+6. **Communicate progress**: Update user as batches complete
+7. **Handle failures gracefully**: Have a plan for when tasks fail
+8. **Optimize for speed**: Maximize parallelism where safe to do so
 
 ## Anti-Patterns to Avoid
 
