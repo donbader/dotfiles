@@ -67,7 +67,7 @@ This command is organized into the following modules:
 - **{file:./review-pr-v2/phase-9-cleanup.md}** - Phase 9: Cleanup Worktree
 - **{file:./review-pr-v2/phase-10-confirm.md}** - Phase 10: Confirm Success
 
-### Templates & Guidelines
+### Templates, Guidelines & CLI Reference
 - **{file:./review-pr-v2/templates.md}** - Comment templates for all severity levels
   - High confidence critical issues
   - Medium confidence important issues
@@ -79,6 +79,11 @@ This command is organized into the following modules:
   - Tone guidelines
   - Error handling
   - Edge cases
+
+- **{file:./review-pr-v2/gh-commands.md}** - Reusable GitHub CLI commands
+  - Fetching PR metadata and diffs
+  - Creating reviews with inline comments
+  - Re-review verification and thread resolution
 
 ## Quick Reference
 
