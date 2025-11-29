@@ -67,7 +67,9 @@ Each session has its own:
   - `shared_context.json`
   - `{agent}_output.json` files
   - `sorted_findings.json`
-- **Worktree** (if using URL mode): `./.worktree/pr-review-{pr_number}/`
+- **Worktree** (if using URL mode): `{current_dir}/.worktree/pr-review-{pr_number}/`
+  - Created in your current working directory
+  - Multiple PRs can have worktrees in the same `.worktree` folder
 
 ### Example: Running 3 Reviews in Parallel
 
@@ -133,11 +135,23 @@ fi
 
 # 2. Create git worktree for isolation (if reviewing from URL)
 if [ "$use_worktree" = true ]; then
-  # Use absolute path based on current working directory
-  # This ensures worktree is created in the current folder, not git root
+  # Verify we're in a git repository
+  if ! git rev-parse --git-dir > /dev/null 2>&1; then
+    echo "ERROR: Not in a git repository. Cannot create worktree."
+    exit 1
+  fi
+  
+  # Create worktree in current working directory
+  # Note: Even though we create it here, git tracks worktrees relative to repo root
   current_dir="$(pwd)"
   worktree_path="${current_dir}/.worktree/pr-review-${pr_number}"
   pr_branch=$(gh pr view "$pr_number" --json headRefName -q .headRefName)
+  
+  echo "📁 Current directory: $current_dir"
+  echo "🌳 Creating worktree at: $worktree_path"
+  
+  # Create .worktree directory if it doesn't exist
+  mkdir -p "${current_dir}/.worktree"
   
   git fetch origin "$pr_branch"
   git worktree add "$worktree_path" "origin/$pr_branch"
@@ -151,6 +165,8 @@ if [ "$use_worktree" = true ]; then
     if [ -n "$worktree_path" ] && [ -d "$worktree_path" ]; then
       cd - > /dev/null 2>&1
       git worktree remove "$worktree_path" --force 2>/dev/null
+      # Also try to remove empty .worktree directory
+      rmdir "${current_dir}/.worktree" 2>/dev/null || true
     fi
   }
   trap cleanup_on_exit EXIT
