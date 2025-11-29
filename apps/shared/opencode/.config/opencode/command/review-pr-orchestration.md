@@ -1,5 +1,5 @@
 ---
-name: git:review-pr-v4
+name: git:review-pr-orchestration
 description: Multi-agent PR review with specialized reviewers (code-quality, security, performance)
 ---
 
