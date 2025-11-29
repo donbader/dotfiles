@@ -21,7 +21,7 @@ Perform thorough, context-aware, educational code reviews with multi-phase analy
 
 ## Workflow Overview
 
-The review workflow consists of **7 sequential phases**:
+The review workflow consists of **6 sequential phases**:
 
 ### Phase 1: Setup & PR Detection
 **Sequential** - Must complete before proceeding
@@ -107,35 +107,7 @@ gh pr view "$pr_number" --json title,state || {
 
 ---
 
-### Phase 4: Review Mode Selection
-**Sequential** - Decision point based on Phase 2 outputs
-
-**Logic**:
-```bash
-# Analyze review history to determine mode
-if [ "$has_previous_opencode_reviews" = false ]; then
-  review_mode="first_review"
-elif [ "$unresolved_thread_count" -gt 0 ]; then
-  review_mode="re_review"
-elif [ "$has_new_commits_since_last_review" = true ]; then
-  review_mode="incremental_review"
-else
-  echo "✅ All previous concerns addressed. No new changes to review."
-  exit 0
-fi
-```
-
-**Modes**:
-- **first_review**: No previous OpenCode reviews → Comprehensive review (7-10 comments)
-- **re_review**: Unresolved threads exist → Verification focused (3 NEW issues max)
-- **incremental_review**: All resolved + new commits → Delta only (5 critical issues max)
-- **no_review_needed**: All resolved + no new commits → Exit early
-
-**Output**: `$review_mode`, scope boundaries for next phases
-
----
-
-### Phase 5: Two-Pass Code Analysis
+### Phase 4: Two-Pass Code Analysis
 **Pass 1 (parallel): Run all 6 category scans simultaneously**
 **Pass 2 (parallel): Assign severity to each finding using context**
 
@@ -158,7 +130,7 @@ fi
 
 ---
 
-### Phase 6: Comment Filtering & Posting
+### Phase 5: Comment Filtering & Posting
 **Apply mode-specific limits and post review**
 
 **Comment Limits**: Enforced based on selected review mode from Phase 4
@@ -185,7 +157,7 @@ fi
 
 ---
 
-### Phase 7: Cleanup
+### Phase 6: Cleanup
 **Sequential** - Final teardown
 
 **Tasks**:
@@ -219,10 +191,10 @@ Execute tasks in parallel where possible to achieve significant time savings:
 |-------|-----------|----------|-------------|
 | Phase 2: Info Gathering | ~10s | ~3s | 70% faster |
 | Phase 3: Context Gathering | ~15s | ~6s | 60% faster |
-| Phase 5: Code Analysis | ~60s | ~15s | 75% faster |
+| Phase 4: Code Analysis | ~60s | ~15s | 75% faster |
 | **Total** | **~85-90s** | **~20-25s** | **70-75% faster** |
 
-**Key Insight**: Phases 2, 3, and 5 contain I/O-bound and CPU-bound tasks that can run concurrently.
+**Key Insight**: Phases 2, 3, and 4 contain I/O-bound and CPU-bound tasks that can run concurrently.
 
 ---
 
@@ -248,18 +220,15 @@ worktree_path=".worktree/pr-review-123"
 # Execute: parse intent, search patterns, check docs, extract comments, analyze history
 # Receive: intent, patterns={sql_concat: 12 occurrences}, docs, comments
 
-# Phase 4: Select mode
-REVIEW_MODE="first_review"  # No previous reviews
-
-# Phase 5: Code analysis (parallel execution)
+# Phase 4: Code analysis (parallel execution)
 # Execute: 6 category scans in parallel, then severity assignment in parallel
 # Receive: 17 findings with severity assignments
 
-# Phase 6: Filter & post
+# Phase 5: Filter & post
 # Execute: apply limit (7-10), filter, format, post
 # Receive: "Posted 7 comments with review summary"
 
-# Phase 7: Cleanup
+# Phase 6: Cleanup
 cd - > /dev/null
 git worktree remove "$worktree_path" --force
 echo "✅ Review complete for PR #$pr_number"
@@ -281,15 +250,13 @@ REVIEW_MODE="re_review"
 
 # Phase 3: Skip (not needed for re-review)
 
-# Phase 4: Confirmed re-review mode
+# Phase 4: Skip full analysis
 
-# Phase 5: Skip full analysis
-
-# Phase 6: Verification
+# Phase 5: Verification
 # Execute: fetch unresolved threads, verify fixes, post replies, mark resolved
 # Receive: "Verified 3 fixes, posted verification summary"
 
-# Phase 7: Cleanup (no worktree to remove)
+# Phase 6: Cleanup (no worktree to remove)
 echo "✅ Review complete for PR #$pr_number"
 ```
 
@@ -448,13 +415,12 @@ OR
 
 ### Phase Completion Checks
 
-**Phase 1**: ✅ `$pr_number` extracted, worktree created (if needed), PR validated
-**Phase 2**: ✅ Metadata, files, diff, review history fetched
-**Phase 3**: ✅ Intent parsed, patterns counted, context gathered
-**Phase 4**: ✅ Review mode selected with clear rationale
-**Phase 5**: ✅ Findings categorized with severity assigned
-**Phase 6**: ✅ Comments posted within mode limits
-**Phase 7**: ✅ Worktree removed (if created), success message displayed
+**Phase 1**: ✅ `$pr_number` extracted, worktree created (if needed), PR validated  
+**Phase 2**: ✅ Metadata, files, diff, review history fetched  
+**Phase 3**: ✅ Intent parsed, patterns counted, context gathered  
+**Phase 4**: ✅ Findings categorized with severity assigned  
+**Phase 5**: ✅ Comments posted within mode limits  
+**Phase 6**: ✅ Worktree removed (if created), success message displayed
 
 ### Quality Checks
 
@@ -470,12 +436,13 @@ OR
 
 Any agent executing this command should:
 
-1. **Execute tasks in parallel** where indicated (Phases 2, 3, 5)
+1. **Execute tasks in parallel** where indicated (Phases 2, 3, 4)
 2. **Use GitHub CLI** for all GitHub operations
-3. **Format comments** with educational explanations
-4. **Apply filters** to remove false positives
-5. **Respect mode limits** for comment counts
-6. **Clean up resources** (worktrees) when done
-7. **Handle errors** gracefully with clear messages
+3. **Select appropriate review mode** based on PR state (see pr-reviewer.md)
+4. **Format comments** with educational explanations
+5. **Apply filters** to remove false positives
+6. **Respect mode limits** for comment counts
+7. **Clean up resources** (worktrees) when done
+8. **Handle errors** gracefully with clear messages
 
 For detailed examples of each capability, see the Example Execution Flows section above.
