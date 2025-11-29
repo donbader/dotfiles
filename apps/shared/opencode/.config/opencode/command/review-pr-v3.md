@@ -372,7 +372,7 @@ Each phase must complete successfully before proceeding to the next:
 1. Security scan (SQL injection, XSS, path traversal)
 2. Bug scan (null derefs, off-by-one, race conditions)
 3. Performance scan (N+1 queries, memory leaks)
-4. Architecture scan (tight coupling, missing abstractions)
+4. Architecture scan (tight coupling, missing abstractions, circular dependencies, poor modularity, unclear boundaries)
 5. Testing scan (missing tests, inadequate coverage)
 6. Readability scan (magic numbers, unclear names)
 

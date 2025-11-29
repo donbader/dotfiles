@@ -382,7 +382,360 @@ Incremental scope: Only review changes in commits def456, ghi789, xyz789
 Skip: All code unchanged from abc123
 ```
 
+### 4. Modularity & Clear Boundaries
+
+**Core principle**: Code should be organized into cohesive modules with well-defined boundaries and responsibilities.
+
+#### What to Look For
+
+**Module Cohesion** - Elements that belong together:
+- ✅ Functions/methods operate on the same data
+- ✅ Changes to one function rarely require changing others
+- ✅ Module has a single, clear purpose
+- ❌ "God classes" that do everything
+- ❌ Utility dumping grounds with unrelated functions
+
+**Boundary Definition** - Clear interfaces between modules:
+- ✅ Public API is minimal and intentional
+- ✅ Dependencies flow in one direction (no circular deps)
+- ✅ Internal implementation details are private/hidden
+- ❌ Reaching into other modules' internals
+- ❌ Tight coupling through shared mutable state
+
+**Separation of Concerns** - Each module has distinct responsibility:
+- ✅ Business logic separated from infrastructure
+- ✅ Data access separated from presentation
+- ✅ Configuration separated from implementation
+- ❌ Database queries mixed with UI rendering
+- ❌ HTTP handling mixed with business rules
+
+#### Detection Patterns
+
+**Signs of poor modularity**:
+
+1. **Feature Envy** - Method uses data from another class more than its own
+   ```typescript
+   // ❌ Bad: Order class reaching into Customer internals
+   class Order {
+     getDiscount() {
+       return this.customer.isPremium() && this.customer.loyaltyPoints > 100
+         ? this.total * 0.1 
+         : 0;
+     }
+   }
+   
+   // ✅ Good: Customer knows its own discount eligibility
+   class Order {
+     getDiscount() {
+       return this.customer.getDiscountRate(this.total);
+     }
+   }
+   ```
+
+2. **Shotgun Surgery** - Single change requires modifications across many modules
+   ```typescript
+   // ❌ Bad: Adding payment method requires changing 5+ files
+   // OrderController.ts - add route
+   // OrderService.ts - add validation
+   // PaymentGateway.ts - add processor
+   // Order.ts - add field
+   // OrderRepository.ts - add query
+   
+   // ✅ Good: Payment methods are pluggable via interface
+   // Only need: Add new PaymentMethod implementation
+   ```
+
+3. **Primitive Obsession** - Using primitives instead of domain types
+   ```typescript
+   // ❌ Bad: Email is just a string (no boundaries)
+   function sendEmail(to: string, from: string, subject: string) {
+     // What prevents sendEmail("not-an-email", ...)?
+   }
+   
+   // ✅ Good: Email is a type with validation (clear boundary)
+   class Email {
+     private constructor(private value: string) {}
+     
+     static create(value: string): Email | Error {
+       if (!isValidEmail(value)) return new Error("Invalid email");
+       return new Email(value);
+     }
+   }
+   
+   function sendEmail(to: Email, from: Email, subject: string) {
+     // Type system enforces validity
+   }
+   ```
+
+4. **Leaky Abstractions** - Implementation details escape module boundaries
+   ```python
+   # ❌ Bad: Database implementation leaks to business logic
+   def get_user(user_id):
+       result = db.query("SELECT * FROM users WHERE id = ?", user_id)
+       return result.rows[0]  # Exposes database result structure
+   
+   # ✅ Good: Repository pattern hides implementation
+   class UserRepository:
+       def get_by_id(self, user_id: str) -> User:
+           row = self._db.query("SELECT * FROM users WHERE id = ?", user_id)
+           return User.from_db_row(row)  # Returns domain object
+   ```
+
+5. **Circular Dependencies** - Modules depend on each other
+   ```typescript
+   // ❌ Bad: A imports B, B imports A
+   // OrderService.ts
+   import { CustomerService } from './CustomerService';
+   
+   // CustomerService.ts
+   import { OrderService } from './OrderService';  // Circular!
+   
+   // ✅ Good: Extract shared interface or use events
+   // OrderService.ts
+   import { ICustomerLookup } from './interfaces';
+   
+   // CustomerService.ts
+   // No import of OrderService
+   // Emits 'customer.updated' event instead
+   ```
+
+#### Modularity Review Questions
+
+When reviewing code for modularity, ask:
+
+1. **Cohesion**: "Do all functions in this module work toward the same goal?"
+2. **Coupling**: "How many other modules would break if this module's internals changed?"
+3. **Information Hiding**: "Can I change the implementation without changing callers?"
+4. **Single Responsibility**: "If I describe this module, do I use 'and' or 'or'?"
+5. **Dependency Direction**: "Do dependencies flow toward stable abstractions?"
+6. **Interface Clarity**: "Is it clear what this module does from its public API?"
+7. **Testability**: "Can I test this module in isolation?"
+
+#### Suggesting Improvements
+
+**Template for modularity feedback**:
+
+```markdown
+⚠️ **Important - Modularity**
+
+**Issue**: [Specific coupling or cohesion problem]
+
+**Why this matters**: [Impact on maintainability, testing, or changes]
+
+**Boundary Analysis**:
+- Current: [What depends on what]
+- Problem: [Why current boundaries make changes hard]
+
+**Suggested refactoring**:
+\`\`\`[language]
+// Step 1: Extract interface
+interface PaymentProcessor {
+  charge(amount: Money): Result<Transaction, Error>;
+}
+
+// Step 2: Implement for each payment method
+class StripeProcessor implements PaymentProcessor { ... }
+class PayPalProcessor implements PaymentProcessor { ... }
+
+// Step 3: Inject dependency
+class OrderService {
+  constructor(private paymentProcessor: PaymentProcessor) {}
+}
+\`\`\`
+
+**Benefits**:
+- ✅ Clear boundary between payment and order logic
+- ✅ Easy to add new payment methods
+- ✅ Testable in isolation with mock processor
+- ✅ Changes to payment logic don't affect orders
+
+**Migration path**: [How to get there incrementally if needed]
+```
+
+#### Confidence Guidelines for Modularity Issues
+
+| Severity | When to Use |
+|----------|-------------|
+| 🚨 **Critical** | Circular dependencies, direct database access in UI layer, hard-coded external service URLs |
+| ⚠️ **Important** | High coupling (class uses >5 other classes), "god class" (>500 lines), feature envy pattern |
+| 💡 **Suggestion** | Could use value object instead of primitive, interface would improve testability |
+| ❓ **Question** | "Is this tight coupling intentional for performance?" "Should these be separate modules?" |
+
+**Key Rule**: Default to 💡 Suggestion or ❓ Question for modularity feedback. Only use ⚠️ Important or 🚨 Critical when poor boundaries create concrete problems (hard to test, hard to change, performance issues).
+
 ## Best Practices
+
+### Identifying Module Boundaries
+
+When reviewing architecture, actively look for boundary issues:
+
+**1. Dependency Analysis**
+- Count import statements - if a file imports >10 modules, it may lack cohesion
+- Check import direction - does it flow toward stable abstractions?
+- Identify circular imports - these indicate unclear boundaries
+
+**2. Change Impact Analysis**
+- Ask: "If I change this function, what else must change?"
+- If answer is "5+ other files", boundaries may be too tight
+- Good modularity = changes are localized
+
+**3. Interface Inspection**
+- Public API should be minimal (not every method)
+- Ask: "Does this method need to be public?"
+- Private/internal details shouldn't leak to callers
+
+**4. Responsibility Assignment**
+- Each module should answer one question well:
+  - Repository: "How do I persist/retrieve data?"
+  - Service: "What are the business rules?"
+  - Controller: "How do I handle HTTP requests?"
+  - View: "How do I present data to users?"
+
+**5. Domain Language**
+- Module names should use domain terms, not technical ones
+- ✅ Good: `OrderProcessor`, `CustomerRepository`, `PaymentGateway`
+- ❌ Bad: `DataManager`, `Helper`, `Util`, `Handler`
+
+### Suggesting Modular Refactorings
+
+When code violates modularity, suggest incremental improvements:
+
+**Pattern 1: Extract Interface**
+```markdown
+💡 **Suggestion - Define Clear Boundary**
+
+**Current**: `OrderService` directly depends on `StripePaymentProcessor` concrete class
+
+**Issue**: Changing payment providers requires modifying `OrderService`
+
+**Refactoring**:
+\`\`\`typescript
+// Step 1: Define boundary (interface)
+interface PaymentProcessor {
+  charge(amount: Money): Promise<Result<Transaction, Error>>;
+}
+
+// Step 2: OrderService depends on interface (not implementation)
+class OrderService {
+  constructor(private payment: PaymentProcessor) {}
+  
+  async processOrder(order: Order) {
+    const result = await this.payment.charge(order.total);
+    // ...
+  }
+}
+
+// Step 3: Implementations remain separate
+class StripePaymentProcessor implements PaymentProcessor { ... }
+class PayPalPaymentProcessor implements PaymentProcessor { ... }
+\`\`\`
+
+**Benefits**: 
+- Clear boundary between order and payment logic
+- Easy to swap or add payment methods
+- Testable with mock processor
+```
+
+**Pattern 2: Extract Value Object**
+```markdown
+💡 **Suggestion - Strengthen Boundary with Type**
+
+**Current**: Email validation scattered across 3 files
+
+**Issue**: No single source of truth for what makes a valid email
+
+**Refactoring**:
+\`\`\`typescript
+// Create value object that enforces boundary
+class Email {
+  private constructor(private readonly value: string) {}
+  
+  static create(value: string): Result<Email, ValidationError> {
+    if (!this.isValid(value)) {
+      return err(new ValidationError("Invalid email format"));
+    }
+    return ok(new Email(value));
+  }
+  
+  private static isValid(value: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  }
+  
+  toString(): string {
+    return this.value;
+  }
+}
+
+// Usage - validation happens at boundary
+const emailResult = Email.create(userInput);
+if (emailResult.isErr()) {
+  return emailResult.error;
+}
+sendNotification(emailResult.value);  // Guaranteed valid
+\`\`\`
+
+**Benefits**:
+- Validation in one place (boundary enforcement)
+- Invalid emails can't exist in the system
+- Type system prevents bugs
+```
+
+**Pattern 3: Extract Module**
+```markdown
+⚠️ **Important - Split Module for Clarity**
+
+**Current**: `UserService` handles authentication, profile management, and notifications (340 lines)
+
+**Issue**: Single module with multiple responsibilities - violates Single Responsibility Principle
+
+**Refactoring**:
+\`\`\`typescript
+// Split into focused modules
+
+// 1. Authentication (60 lines)
+class AuthenticationService {
+  login(credentials: Credentials): Promise<Session>;
+  logout(session: Session): Promise<void>;
+  validateSession(token: string): Promise<Session>;
+}
+
+// 2. Profile Management (80 lines)
+class ProfileService {
+  getProfile(userId: UserId): Promise<Profile>;
+  updateProfile(userId: UserId, updates: ProfileUpdate): Promise<Profile>;
+}
+
+// 3. Notifications (50 lines)
+class NotificationService {
+  sendWelcomeEmail(user: User): Promise<void>;
+  sendPasswordReset(user: User): Promise<void>;
+}
+
+// 4. Orchestration (if needed)
+class UserFacade {
+  constructor(
+    private auth: AuthenticationService,
+    private profile: ProfileService,
+    private notify: NotificationService
+  ) {}
+  
+  async registerUser(data: RegistrationData) {
+    const session = await this.auth.createSession(data);
+    const profile = await this.profile.createProfile(session.userId, data);
+    await this.notify.sendWelcomeEmail(profile);
+    return { session, profile };
+  }
+}
+\`\`\`
+
+**Benefits**:
+- Each module has clear, focused responsibility
+- Easier to test in isolation
+- Easier to find and modify code
+- Can evolve independently
+
+**Migration**: Extract one service at a time, starting with notifications (least dependencies)
+```
 
 ### Writing Educational Comments
 
@@ -878,6 +1231,367 @@ Understanding this will help me provide better recommendations!
 \`\`\`
 
 [Why this is good - principle followed, problem solved elegantly]
+
+---
+*🤖 Generated by OpenCode*
+```
+
+### Modularity & Boundaries
+
+Use these templates when reviewing architectural concerns:
+
+#### Template: Circular Dependency
+
+```markdown
+🚨 **Critical - Circular Dependency**
+
+**Issue**: Circular import between `OrderService` and `CustomerService`
+
+**Why critical**: 
+- Makes dependency graph unclear
+- Prevents proper testing and mocking
+- Can cause initialization order bugs
+- Indicates unclear module boundaries
+
+**Current dependency chain**:
+```
+OrderService → CustomerService → OrderService
+  (needs customer data)  (needs order count)
+```
+
+**Fix - Extract shared interface**:
+\`\`\`typescript
+// 1. Define interface for what Customer needs from Order
+interface IOrderLookup {
+  getOrderCount(customerId: string): Promise<number>;
+}
+
+// 2. OrderService implements interface (no import of Customer)
+class OrderService implements IOrderLookup {
+  async getOrderCount(customerId: string): Promise<number> {
+    // Implementation
+  }
+}
+
+// 3. CustomerService depends on interface (not concrete class)
+class CustomerService {
+  constructor(private orderLookup: IOrderLookup) {}
+  
+  async getCustomerTier(customerId: string) {
+    const orderCount = await this.orderLookup.getOrderCount(customerId);
+    return orderCount > 10 ? 'Premium' : 'Standard';
+  }
+}
+\`\`\`
+
+**Alternative - Use events**:
+If OrderService doesn't need to know about CustomerService at all, use domain events:
+\`\`\`typescript
+// OrderService emits events (no Customer import)
+class OrderService {
+  async createOrder(order: Order) {
+    // ... create order
+    this.eventBus.emit('order.created', { customerId: order.customerId });
+  }
+}
+
+// CustomerService listens (no Order import)
+class CustomerService {
+  constructor(eventBus: EventBus) {
+    eventBus.on('order.created', (event) => this.updateOrderCount(event));
+  }
+}
+\`\`\`
+
+**Learning**: Circular dependencies indicate modules that haven't been properly separated. Break the cycle by extracting an interface, using events, or moving shared code to a new module.
+
+---
+*🤖 Generated by OpenCode*
+```
+
+#### Template: Feature Envy
+
+```markdown
+⚠️ **Important - Feature Envy (Poor Boundary)**
+
+**Issue**: `calculateDiscount()` method reaches into `Customer` internals repeatedly
+
+**Current code**:
+\`\`\`typescript
+class Order {
+  calculateDiscount(): number {
+    // Reaching into Customer internals (feature envy)
+    if (this.customer.membershipLevel === 'premium' &&
+        this.customer.loyaltyPoints > 1000 &&
+        this.customer.accountAge > 365) {
+      return this.total * 0.15;
+    }
+    return 0;
+  }
+}
+\`\`\`
+
+**Why this matters**: 
+- Order class knows too much about Customer's structure
+- Changes to Customer's discount logic require changing Order
+- Violates "Tell, Don't Ask" principle
+- Discount logic is split between two classes
+
+**Refactoring - Move logic to Customer**:
+\`\`\`typescript
+class Customer {
+  getDiscountRate(): number {
+    if (this.membershipLevel === 'premium' &&
+        this.loyaltyPoints > 1000 &&
+        this.accountAge > 365) {
+      return 0.15;
+    }
+    return 0;
+  }
+}
+
+class Order {
+  calculateDiscount(): number {
+    // Tell Customer what we need, don't ask for its data
+    return this.total * this.customer.getDiscountRate();
+  }
+}
+\`\`\`
+
+**Benefits**:
+- Clear boundary: Customer owns discount logic
+- Order doesn't need to know Customer's internals
+- Easy to change discount rules (one place)
+- Better testability
+
+**Learning**: When a method uses data from another class more than its own, consider moving that method to the other class. This respects module boundaries.
+
+---
+*🤖 Generated by OpenCode*
+```
+
+#### Template: Leaky Abstraction
+
+```markdown
+⚠️ **Important - Leaky Abstraction**
+
+**Issue**: Database implementation details leak through repository interface
+
+**Current code**:
+\`\`\`typescript
+class UserRepository {
+  async findById(id: string): Promise<QueryResult> {
+    const result = await this.db.query('SELECT * FROM users WHERE id = ?', [id]);
+    return result;  // ❌ Returns database-specific QueryResult
+  }
+}
+
+// Caller must know about database structure
+const result = await userRepo.findById('123');
+const user = result.rows[0];  // Knows about database row structure
+\`\`\`
+
+**Why this matters**:
+- Business logic depends on database implementation
+- Can't swap database without changing all callers
+- Repository abstraction doesn't actually hide anything
+- Hard to test (need real database structure)
+
+**Fix - Return domain objects**:
+\`\`\`typescript
+// Define domain model (database-agnostic)
+class User {
+  constructor(
+    public readonly id: string,
+    public readonly email: string,
+    public readonly name: string
+  ) {}
+  
+  static fromDbRow(row: any): User {
+    return new User(row.id, row.email, row.name);
+  }
+}
+
+class UserRepository {
+  async findById(id: string): Promise<User | null> {
+    const result = await this.db.query('SELECT * FROM users WHERE id = ?', [id]);
+    if (result.rows.length === 0) return null;
+    return User.fromDbRow(result.rows[0]);  // ✅ Returns domain object
+  }
+}
+
+// Caller uses domain model (database-agnostic)
+const user = await userRepo.findById('123');
+if (user) {
+  console.log(user.email);  // Clean domain API
+}
+\`\`\`
+
+**Benefits**:
+- Clear boundary between data access and business logic
+- Can swap database implementation
+- Business logic uses domain language
+- Easy to test with mock repository
+
+**Learning**: Abstractions should hide implementation details. If callers need to know about internal structure (database rows, HTTP responses), the abstraction is leaking.
+
+---
+*🤖 Generated by OpenCode*
+```
+
+#### Template: God Class
+
+```markdown
+⚠️ **Important - God Class (Multiple Responsibilities)**
+
+**Issue**: `UserService` handles too many unrelated responsibilities (${lineCount} lines)
+
+**Current responsibilities**:
+1. Authentication (login, logout, sessions)
+2. Profile management (get, update, delete)
+3. Notifications (email, SMS)
+4. Password reset
+5. User preferences
+6. Avatar uploads
+
+**Why this matters**:
+- Single class has 6 different reasons to change (violates SRP)
+- Hard to test (need to mock everything)
+- Hard to understand (too much cognitive load)
+- Changes in one area risk breaking others
+- Multiple developers will conflict on this file
+
+**Refactoring - Split into focused modules**:
+\`\`\`typescript
+// 1. Authentication - handles login/logout/sessions
+class AuthenticationService {
+  async login(credentials: Credentials): Promise<Session>;
+  async logout(sessionId: string): Promise<void>;
+  async validateSession(token: string): Promise<User>;
+}
+
+// 2. Profile Management - handles user data
+class ProfileService {
+  async getProfile(userId: string): Promise<Profile>;
+  async updateProfile(userId: string, updates: ProfileUpdate): Promise<Profile>;
+  async deleteProfile(userId: string): Promise<void>;
+}
+
+// 3. Notifications - handles communication
+class UserNotificationService {
+  async sendWelcomeEmail(user: User): Promise<void>;
+  async sendPasswordReset(user: User, resetToken: string): Promise<void>;
+}
+
+// 4. If coordination needed, use facade
+class UserFacade {
+  constructor(
+    private auth: AuthenticationService,
+    private profile: ProfileService,
+    private notifications: UserNotificationService
+  ) {}
+  
+  async registerNewUser(data: RegistrationData) {
+    const user = await this.profile.createProfile(data);
+    const session = await this.auth.createSession(user);
+    await this.notifications.sendWelcomeEmail(user);
+    return { user, session };
+  }
+}
+\`\`\`
+
+**Migration path**:
+1. Start with least coupled responsibility (notifications)
+2. Extract to new service, update imports
+3. Repeat for each responsibility
+4. Original class becomes facade or disappears
+
+**Benefits**:
+- Each service has single, clear purpose
+- Easier to test in isolation
+- Easier to find and modify code
+- Can assign different services to different developers
+- Can scale/optimize services independently
+
+**Learning**: Classes should have a single reason to change. If describing a class requires "and" or "or", it likely has too many responsibilities.
+
+---
+*🤖 Generated by OpenCode*
+```
+
+#### Template: Primitive Obsession
+
+```markdown
+💡 **Suggestion - Strengthen Type Boundary**
+
+**Observation**: Using primitive `string` for email addresses throughout
+
+**Current**:
+\`\`\`typescript
+function sendEmail(to: string, subject: string, body: string) {
+  // What prevents: sendEmail("not-an-email", "subject", "body")?
+  // Validation is scattered across multiple call sites
+}
+
+// Validation in 5 different places
+if (!isValidEmail(email)) { ... }
+\`\`\`
+
+**Why value objects help**:
+- Validation in one place (at boundary)
+- Invalid emails can't exist in the system
+- Type system prevents bugs
+- Self-documenting code
+
+**Refactoring - Extract value object**:
+\`\`\`typescript
+class Email {
+  private constructor(private readonly value: string) {}
+  
+  static create(value: string): Result<Email, ValidationError> {
+    if (!this.isValid(value)) {
+      return err(new ValidationError(\`Invalid email: \${value}\`));
+    }
+    return ok(new Email(value));
+  }
+  
+  private static isValid(value: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  }
+  
+  toString(): string {
+    return this.value;
+  }
+  
+  getDomain(): string {
+    return this.value.split('@')[1];
+  }
+}
+
+// Usage - validation at boundary
+function sendEmail(to: Email, subject: string, body: string) {
+  // to is guaranteed valid - no need to check
+  const domain = to.getDomain();  // Domain logic on Email type
+  // ...
+}
+
+// At system boundary
+const emailResult = Email.create(userInput);
+if (emailResult.isErr()) {
+  return { error: emailResult.error.message };
+}
+sendEmail(emailResult.value, "Welcome", "...");
+\`\`\`
+
+**Benefits**:
+- Single source of truth for validation
+- Impossible to have invalid emails in the system
+- Rich domain model (getDomain(), etc.)
+- Refactoring safety (change Email implementation, not 20 call sites)
+
+**Other candidates**: `UserId`, `Money`, `PhoneNumber`, `URL`, `DateRange`
+
+**Learning**: When a primitive type has validation rules or domain behavior, consider wrapping it in a value object. This creates a clear boundary and enforces invariants.
 
 ---
 *🤖 Generated by OpenCode*
