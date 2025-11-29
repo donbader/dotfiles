@@ -1,6 +1,6 @@
 # Reviewer Base - Common Knowledge
 
-This document contains shared knowledge used by ALL specialist reviewer agents (code-quality, security, performance).
+This document contains shared knowledge used by ALL specialist reviewer agents.
 
 ---
 
