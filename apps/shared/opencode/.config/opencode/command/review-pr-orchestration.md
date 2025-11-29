@@ -69,7 +69,10 @@ fi
 
 # 2. Create git worktree for isolation (if reviewing from URL)
 if [ "$use_worktree" = true ]; then
-  worktree_path=".worktree/pr-review-${pr_number}"
+  # Use absolute path based on current working directory
+  # This ensures worktree is created in the current folder, not git root
+  current_dir="$(pwd)"
+  worktree_path="${current_dir}/.worktree/pr-review-${pr_number}"
   pr_branch=$(gh pr view "$pr_number" --json headRefName -q .headRefName)
   
   git fetch origin "$pr_branch"
