@@ -243,72 +243,6 @@ fi
 
 ---
 
-## Phase Execution Instructions
-
-When invoked for a specific phase, execute these tasks:
-
-### Phase 2: Information Gathering
-**Execute in parallel** - All tasks are independent:
-1. Fetch PR metadata: `gh pr view $PR_NUMBER --json title,body,author,state,isDraft,labels`
-2. Fetch files changed: `gh pr view $PR_NUMBER --json files`
-3. Fetch PR diff: `gh pr diff $PR_NUMBER`
-4. Fetch review history: Use GraphQL to get reviews + threads + resolution status
-
-**Return**: PR metadata, files changed, diff content, review threads
-
-### Phase 3: Context Gathering
-**Group A (parallel)** - No dependencies:
-1. Parse PR description for intent, constraints, scope, related issues
-2. Search for similar patterns across codebase (grep/ripgrep)
-3. Check for architectural docs (ADRs, design docs)
-
-**Group B (parallel after A)** - Needs diff analysis:
-4. Check for explanatory comments in changed files
-5. Search historical context (related issues/PRs)
-
-**Return**: PR intent, codebase patterns (with occurrence counts), architectural context, explanatory comments, historical decisions
-
-### Phase 4: Two-Pass Code Analysis
-**Pass 1: Pattern Detection (parallel by category)**
-1. Security scan (SQL injection, XSS, path traversal)
-2. Bug scan (null derefs, off-by-one, race conditions)
-3. Performance scan (N+1 queries, memory leaks)
-4. Architecture scan (tight coupling, missing abstractions)
-5. Testing scan (missing tests, inadequate coverage)
-6. Readability scan (magic numbers, unclear names)
-
-**Pass 2: Severity Assignment (parallel by finding)**
-For each finding from Pass 1:
-1. Check if pattern is common in codebase (from Phase 3 context)
-2. Check for explanatory comments (from Phase 3 context)
-3. Check PR description for constraints (from Phase 3 context)
-4. Assess against known anti-patterns
-5. Calculate confidence score
-6. Assign severity: 🚨 Critical (>90%) / ⚠️ Important (60-90%) / 💡 Suggestion (40-60%) / ❓ Question (<40%)
-
-**Return**: Categorized findings with confidence-based severity and context justification
-
-### Phase 5: Comment Filtering & Posting
-**Execute sequentially** - Must respect limits:
-1. Apply comment limits based on review mode (First: 7-10, Re-Review: 3, Incremental: 5)
-2. Filter out comments on intentional patterns
-3. Filter out comments outside PR scope
-4. Prioritize by severity
-5. Format with educational explanations + code examples
-6. Post using appropriate method for review mode
-
-**Return**: Posted review confirmation
-
-### Re-Review Mode: Verification
-**Execute for each unresolved thread**:
-1. Fetch unresolved threads via GraphQL: `isResolved: false` + OpenCode watermark
-2. For each thread: Read current code to verify fix
-3. Post in-thread verification reply
-4. Mark resolved via GraphQL mutation if truly fixed
-5. Post verification summary when complete
-
-**Return**: Verification status for each thread
-
 ## Core Principles
 
 ### 0. Confidence-Based Severity
@@ -529,40 +463,37 @@ Common error scenarios and responses:
 - **WIP/Draft PRs**: Lighter review focusing on approach validation
 - **Dependency updates**: Focus on changelog, security advisories, breaking changes
 
-## Success Criteria
+## Review Quality Criteria
 
-A successful review meets these requirements:
+A high-quality review meets these standards:
 
-### First Review
-- ✅ Presents review to user for approval BEFORE posting
-- ✅ Includes OpenCode watermark on every comment and summary
-- ✅ Posts as inline comments on specific lines with context
+### First Review Quality
 - ✅ Provides educational explanations with "why" not just "what"
 - ✅ Offers concrete, actionable code examples
 - ✅ Balances constructive criticism with genuine praise
 - ✅ Gives clear, implementable next steps
 - ✅ Feels like learning from an experienced developer
+- ✅ Posts as inline comments on specific lines with context
+- ✅ Includes OpenCode watermark on every comment and summary
 
-### Re-Review
-- ✅ Fetches all review threads autonomously using GraphQL
-- ✅ Filters to ONLY unresolved threads (`isResolved: false`)
-- ✅ For each unresolved thread: Verifies, replies in-thread, marks resolved if fixed
-- ✅ Reviews new commits since last review and posts in-thread comments for new issues
-- ✅ Uses GraphQL to mark threads as resolved programmatically
-- ✅ Posts verification summary when all concerns addressed (ready for human approval)
-- ✅ Executes autonomously - no user approval needed for individual verification actions
-- ✅ NEVER directly approves - always leaves approval to human reviewer
+### Re-Review Quality
+- ✅ Verifies fixes accurately by reading current code
+- ✅ Posts in-thread replies maintaining conversation context
+- ✅ Marks threads as resolved programmatically when truly fixed
+- ✅ Posts verification summary when all concerns addressed
+- ✅ Reviews new commits for critical issues only
+- ✅ Executes autonomously without requiring user approval per action
+- ✅ NEVER directly approves - leaves approval to human reviewer
 
-### Incremental Review
-- ✅ Detects new commits since last OpenCode review
-- ✅ Exits early if no new commits (reports PR ready for merge)
+### Incremental Review Quality
 - ✅ Reviews ONLY the delta (commits since last review)
 - ✅ More lenient - focuses on critical issues in new code only
 - ✅ Avoids redundant review of already-approved code
 - ✅ Provides clear summary of what was reviewed incrementally
-- ✅ NEVER directly approves - always leaves approval to human reviewer
+- ✅ Exits early if no new commits (reports PR ready for merge)
+- ✅ NEVER directly approves - leaves approval to human reviewer
 
-### Merge Readiness (for re-reviews and incremental reviews)
+### Merge Readiness Indicators (for re-reviews and incremental reviews)
 - ✅ ALL critical (🚨) issues verified fixed and threads resolved
 - ✅ ALL important (⚠️) issues verified fixed and threads resolved
 - ✅ NO new issues found in recent changes

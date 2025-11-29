@@ -262,131 +262,13 @@ echo "✅ Review complete for PR #$pr_number"
 
 ---
 
-## GitHub CLI Commands Reference
+## Agent Technical Reference
 
-### PR Information
-```bash
-# Get PR metadata
-gh pr view "$pr_number" --json title,body,author,state,isDraft,labels
+For detailed GitHub CLI commands, GraphQL queries, and comment templates used by the agent during execution, refer to the pr-reviewer.md agent file:
 
-# Get files changed
-gh pr view "$pr_number" --json files
-
-# Get PR diff
-gh pr diff "$pr_number"
-
-# Get PR branch name
-gh pr view "$pr_number" --json headRefName -q .headRefName
-```
-
-### Review History (GraphQL)
-```bash
-# Fetch review threads with resolution status
-gh api graphql -f query='
-  query($owner: String!, $repo: String!, $number: Int!) {
-    repository(owner: $owner, name: $repo) {
-      pullRequest(number: $number) {
-        reviews(last: 100) {
-          nodes {
-            author { login }
-            body
-            createdAt
-            comments(first: 100) {
-              nodes {
-                body
-                path
-                line
-                isResolved
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-' -f owner="$owner" -f repo="$repo" -F number="$pr_number"
-```
-
-### Posting Reviews
-```bash
-# Post review comment
-gh pr review "$pr_number" --comment --body "$(cat review.md)"
-
-# Reply to thread (use comment ID from GraphQL)
-gh api graphql -f query='
-  mutation($id: ID!, $body: String!) {
-    addPullRequestReviewComment(input: {pullRequestReviewId: $id, body: $body}) {
-      comment { id }
-    }
-  }
-' -f id="$thread_id" -f body="$reply_body"
-
-# Mark thread resolved
-gh api graphql -f query='
-  mutation($id: ID!) {
-    resolveReviewThread(input: {threadId: $id}) {
-      thread { isResolved }
-    }
-  }
-' -f id="$thread_id"
-```
-
-### Git Worktree
-```bash
-# Create worktree
-git worktree add "$worktree_path" "origin/$pr_branch"
-
-# Remove worktree
-git worktree remove "$worktree_path" --force
-```
-
----
-
-## Comment Templates
-
-### Educational Review Comment Format
-```markdown
-**[Category]**: Issue summary
-
-**Why this matters**: Educational explanation of the impact
-
-**Example**:
-\`\`\`language
-// Current approach
-[problematic code]
-
-// Recommended approach
-[better code]
-\`\`\`
-
-**Resources**: [Link to docs/best practices]
-```
-
-### Verification Reply Format
-```markdown
-✅ **Verified**: [Issue resolved]
-- [Specific change made]
-- [Why it fixes the issue]
-
-OR
-
-⚠️ **Not fully addressed**: [Remaining concern]
-- [What's still needed]
-```
-
-### Review Summary Format
-```markdown
-## OpenCode Review Summary
-
-**Mode**: [first_review | re_review | incremental_review]
-**Comments**: X findings (Y critical, Z major)
-
-### Key Findings
-1. [Category]: [Brief summary]
-2. [Category]: [Brief summary]
-
-**Note**: This is an educational review. Human approval required.
-```
+- **GitHub CLI Commands**: pr-reviewer.md lines 571-792
+- **Comment Templates**: pr-reviewer.md lines 793-953
+- **Review Philosophy & Principles**: pr-reviewer.md lines 1-450
 
 ---
 
@@ -411,24 +293,199 @@ OR
 
 ---
 
-## Success Criteria
+## Phase Completion Criteria
 
-### Phase Completion Checks
+Each phase must complete successfully before proceeding to the next:
 
-**Phase 1**: ✅ `$pr_number` extracted, worktree created (if needed), PR validated  
-**Phase 2**: ✅ Metadata, files, diff, review history fetched  
-**Phase 3**: ✅ Intent parsed, patterns counted, context gathered  
-**Phase 4**: ✅ Findings categorized with severity assigned  
-**Phase 5**: ✅ Comments posted within mode limits  
-**Phase 6**: ✅ Worktree removed (if created), success message displayed
+**Phase 1 - Setup**: 
+- ✅ PR number extracted from URL or auto-detected
+- ✅ Worktree created (if reviewing from URL)
+- ✅ PR validated and accessible
 
-### Quality Checks
+**Phase 2 - Information Gathering**: 
+- ✅ PR metadata fetched (title, body, author, state)
+- ✅ Files changed list retrieved
+- ✅ PR diff retrieved
+- ✅ Review history fetched via GraphQL
+- ✅ Review mode determined
 
-- **Educational Value**: Every comment explains WHY, not just WHAT
-- **Accuracy**: No false positives from intentional patterns
-- **Scope**: Comments only on changed code (unless architectural)
-- **Actionability**: Each finding includes recommended fix
-- **Tone**: Professional, respectful, educational
+**Phase 3 - Context Gathering**: 
+- ✅ PR intent and constraints parsed
+- ✅ Similar patterns searched (with occurrence counts)
+- ✅ Architectural context gathered
+- ✅ Explanatory comments extracted
+- ✅ Historical context analyzed
+
+**Phase 4 - Code Analysis**: 
+- ✅ All 6 category scans completed
+- ✅ Severity assigned to all findings using context
+- ✅ Findings categorized with confidence scores
+
+**Phase 5 - Comment Filtering & Posting**: 
+- ✅ Comments filtered within mode limits
+- ✅ Intentional patterns excluded
+- ✅ Out-of-scope comments removed
+- ✅ Review posted or verification completed
+
+**Phase 6 - Cleanup**: 
+- ✅ Worktree removed (if created)
+- ✅ Success/failure status reported
+
+---
+
+## Phase Execution Details
+
+### Phase 2: Information Gathering
+**Execution Strategy**: Execute all 5 tasks in parallel
+
+**Tasks**:
+1. Fetch PR metadata: `gh pr view "$pr_number" --json title,body,author,state,isDraft,labels`
+2. Fetch files changed: `gh pr view "$pr_number" --json files`
+3. Fetch PR diff: `gh pr diff "$pr_number"`
+4. Fetch review history via GraphQL (see pr-reviewer.md for query)
+5. Determine review mode based on review history
+
+**Expected Output**: PR metadata, files changed, diff, review threads, suggested review mode
+
+---
+
+### Phase 3: Context Gathering
+**Execution Strategy**: Execute in 2 groups
+
+**Group A (parallel)** - No dependencies:
+1. Parse PR description for intent, constraints, scope, related issues
+2. Search for similar patterns across codebase (grep/ripgrep)
+3. Check for architectural docs (ADRs, design docs)
+
+**Group B (parallel after A)** - Needs diff analysis:
+4. Check for explanatory comments in changed files
+5. Search historical context (related issues/PRs)
+
+**Expected Output**: PR intent, codebase patterns (with occurrence counts), architectural context, explanatory comments, historical decisions
+
+---
+
+### Phase 4: Two-Pass Code Analysis
+**Execution Strategy**: Pass 1 (parallel by category), Pass 2 (parallel by finding)
+
+**Pass 1: Pattern Detection (parallel by category)**
+1. Security scan (SQL injection, XSS, path traversal)
+2. Bug scan (null derefs, off-by-one, race conditions)
+3. Performance scan (N+1 queries, memory leaks)
+4. Architecture scan (tight coupling, missing abstractions)
+5. Testing scan (missing tests, inadequate coverage)
+6. Readability scan (magic numbers, unclear names)
+
+**Pass 2: Severity Assignment (parallel by finding)**
+For each finding from Pass 1:
+1. Check if pattern is common in codebase (from Phase 3 context)
+2. Check for explanatory comments (from Phase 3 context)
+3. Check PR description for constraints (from Phase 3 context)
+4. Assess against known anti-patterns
+5. Calculate confidence score
+6. Assign severity: 🚨 Critical (>90%) / ⚠️ Important (60-90%) / 💡 Suggestion (40-60%) / ❓ Question (<40%)
+
+**Expected Output**: Categorized findings with confidence-based severity and context justification
+
+---
+
+### Phase 5: Comment Filtering & Posting
+**Execution Strategy**: Execute sequentially (must respect limits)
+
+**Tasks**:
+1. Apply comment limits based on review mode (First: 7-10, Re-Review: 3, Incremental: 5)
+2. Filter out comments on intentional patterns
+3. Filter out comments outside PR scope
+4. Prioritize by severity
+5. Format with educational explanations + code examples
+6. Post using appropriate method for review mode
+
+**Re-Review Specific Process**:
+1. Fetch unresolved OpenCode threads via GraphQL
+2. Verify each fix by reading current code
+3. Reply in-thread with verification result
+4. Mark resolved via GraphQL if truly fixed
+5. Post verification summary comment
+
+**Expected Output**: Posted review confirmation or verification summary
+
+---
+
+## Agent Invocation Protocol
+
+The workflow invokes the pr-reviewer agent for each phase. The agent receives phase-specific instructions and executes tasks autonomously.
+
+### Example: Phase 2 Invocation
+
+```bash
+# Invoke agent for Phase 2
+/task agent:pr-reviewer "
+Execute Phase 2: Information Gathering for PR #${pr_number}
+
+Use the parallelization strategy documented in Phase 2 Execution Details.
+Fetch all required data and determine the appropriate review mode.
+
+Return structured output containing:
+- pr_metadata
+- files_changed
+- pr_diff
+- review_history
+- suggested_mode
+"
+```
+
+### Example: Phase 4 Invocation
+
+```bash
+# Invoke agent for Phase 4
+/task agent:pr-reviewer "
+Execute Phase 4: Two-Pass Code Analysis for PR #${pr_number}
+
+Input from Phase 3:
+- PR intent: ${pr_intent}
+- Codebase patterns: ${patterns}
+- Architectural context: ${context}
+
+Execute Pass 1 (pattern detection) and Pass 2 (severity assignment) using the context provided.
+Apply confidence-based severity rules from pr-reviewer.md.
+
+Return categorized findings with severity and justification.
+"
+```
+
+### Agent Output Parsing
+
+The agent returns structured data that the workflow uses for subsequent phases:
+
+```bash
+# Example: Parsing Phase 2 output
+pr_metadata=$(echo "$phase2_output" | jq -r '.pr_metadata')
+files_changed=$(echo "$phase2_output" | jq -r '.files_changed')
+review_mode=$(echo "$phase2_output" | jq -r '.suggested_mode')
+
+# Use in Phase 3
+if [ "$review_mode" = "re_review" ]; then
+  # Skip context gathering, go straight to verification
+  ...
+fi
+```
+
+---
+
+## Workflow Success Criteria
+
+**Completion**: 
+- ✅ All phases completed successfully
+- ✅ Review posted or verification summary provided
+- ✅ Worktree cleaned up (if created)
+
+**Quality**: 
+- ✅ Review mode correctly selected based on PR state
+- ✅ Parallelization applied where specified
+- ✅ Phase outputs properly passed to subsequent phases
+- ✅ Errors handled gracefully with clear messages
+
+**Review Quality**: See pr-reviewer.md for detailed quality criteria including educational value, accuracy, scope, and tone requirements.
 
 ---
 
