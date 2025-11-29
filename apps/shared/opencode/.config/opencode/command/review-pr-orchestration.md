@@ -42,6 +42,52 @@ The orchestrator:
 
 **Priority**: Explicit PR URL takes precedence over auto-detection.
 
+**Parallel Execution Safety**: Each review session uses a unique temporary directory, allowing you to run multiple reviews simultaneously without conflicts.
+
+---
+
+## Parallel Execution Support
+
+This command is designed to be **parallel-execution safe**, meaning you can run multiple PR reviews at the same time without conflicts.
+
+### How It Works
+
+Each review session gets a unique identifier based on:
+- Process ID (`$$`)
+- Unix timestamp (`$(date +%s)`)
+
+Example session IDs:
+- `pr-review-12345-1701234567`
+- `pr-review-12346-1701234568`
+
+### Isolated Resources
+
+Each session has its own:
+- **Temporary directory**: `/tmp/opencode-review/pr-review-{pid}-{timestamp}/`
+  - `shared_context.json`
+  - `{agent}_output.json` files
+  - `sorted_findings.json`
+- **Worktree** (if using URL mode): `./.worktree/pr-review-{pr_number}/`
+
+### Example: Running 3 Reviews in Parallel
+
+```bash
+# Terminal 1
+/git:review-pr-v4 https://github.com/owner/repo/pull/123
+
+# Terminal 2 (different directory or same directory)
+/git:review-pr-v4 https://github.com/owner/repo/pull/456
+
+# Terminal 3
+/git:review-pr-v4 https://github.com/owner/repo/pull/789
+```
+
+Each review will:
+- ✅ Use isolated temp files (no conflicts)
+- ✅ Use separate worktrees (no git conflicts)
+- ✅ Clean up automatically on completion or failure
+- ✅ Not interfere with each other
+
 ---
 
 ## Workflow Phases
@@ -51,6 +97,24 @@ The orchestrator:
 
 **Tasks**:
 ```bash
+# 0. Create unique temporary directory for this review session
+# This prevents conflicts when running multiple reviews in parallel
+review_session_id="pr-review-$$-$(date +%s)"
+temp_dir="/tmp/opencode-review/${review_session_id}"
+mkdir -p "$temp_dir"
+
+echo "📁 Review session: $review_session_id"
+echo "📂 Temp directory: $temp_dir"
+
+# Set up cleanup trap to ensure temp files are removed even on failure
+cleanup_on_exit() {
+  if [ -d "$temp_dir" ]; then
+    rm -rf "$temp_dir"
+    echo "🧹 Cleaned up temporary files"
+  fi
+}
+trap cleanup_on_exit EXIT
+
 # 1. Extract PR number from URL argument OR detect from current branch
 if [ -n "$1" ] && [[ "$1" =~ ^https?:// ]]; then
   # Option A: PR number from URL argument
@@ -78,6 +142,18 @@ if [ "$use_worktree" = true ]; then
   git fetch origin "$pr_branch"
   git worktree add "$worktree_path" "origin/$pr_branch"
   cd "$worktree_path"
+  
+  # Add worktree cleanup to trap
+  cleanup_on_exit() {
+    if [ -d "$temp_dir" ]; then
+      rm -rf "$temp_dir"
+    fi
+    if [ -n "$worktree_path" ] && [ -d "$worktree_path" ]; then
+      cd - > /dev/null 2>&1
+      git worktree remove "$worktree_path" --force 2>/dev/null
+    fi
+  }
+  trap cleanup_on_exit EXIT
 fi
 
 # 3. Validate PR exists and is accessible
@@ -87,7 +163,7 @@ gh pr view "$pr_number" --json title,state || {
 }
 ```
 
-**Output**: `$pr_number`, `$worktree_path` (if created), `$use_worktree` flag
+**Output**: `$pr_number`, `$worktree_path` (if created), `$use_worktree` flag, `$temp_dir`, `$review_session_id`
 
 ---
 
@@ -136,7 +212,7 @@ gh pr view "$pr_number" --json title,state || {
 }
 ```
 
-**Output**: Shared context JSON object
+**Output**: Shared context JSON object stored in `$temp_dir/shared_context.json`
 
 ---
 
@@ -195,7 +271,7 @@ for agent in "${enabled_agents[@]}"; do
 Execute PR review for your specialty.
 
 **Shared Context**:
-$(cat shared_context.json)
+$(cat ${temp_dir}/shared_context.json)
 
 **Instructions**:
 1. Analyze files in 'files_changed' for issues in your domain
@@ -210,7 +286,7 @@ $(cat shared_context.json)
   \"metadata\": {...}
 }
 "
-    > "${agent}_output.json"
+    > "${temp_dir}/${agent}_output.json"
     echo "✓ Completed $agent"
   ) &
   agent_pids+=($!)
@@ -225,7 +301,7 @@ done
 echo "✅ All agents completed"
 ```
 
-**Output**: JSON output files from each agent
+**Output**: JSON output files from each agent in `$temp_dir`
 
 ---
 
@@ -238,7 +314,7 @@ echo "✅ All agents completed"
 all_findings=()
 
 for agent in "${enabled_agents[@]}"; do
-  agent_findings=$(jq -r '.findings[]' "${agent}_output.json")
+  agent_findings=$(jq -r '.findings[]' "${temp_dir}/${agent}_output.json")
   all_findings+=("$agent_findings")
 done
 
@@ -385,7 +461,7 @@ echo ""
 
 ```bash
 # Save findings for potential manual review
-echo "$sorted_findings" > sorted_findings.json
+echo "$sorted_findings" > "${temp_dir}/sorted_findings.json"
 
 # Request approval from user
 echo "⚠️  Ready to post review with $(echo "$sorted_findings" | jq '. | length') comments to PR #$pr_number"
@@ -398,7 +474,7 @@ echo ""
 # User should explicitly approve before proceeding to Step 4
 
 echo "💡 Files available for manual review:"
-echo "   - Findings JSON: sorted_findings.json"
+echo "   - Findings JSON: ${temp_dir}/sorted_findings.json"
 echo ""
 echo "⏸️  WAITING FOR USER APPROVAL TO POST REVIEW"
 echo ""
@@ -467,24 +543,16 @@ echo ""
 **Sequential** - Final teardown
 
 ```bash
-# 1. Remove worktree (if created)
-if [ "$use_worktree" = true ]; then
-  cd - > /dev/null
-  git worktree remove "$worktree_path" --force 2>/dev/null || {
-    echo "WARNING: Failed to remove worktree at $worktree_path"
-    echo "Manual cleanup: git worktree remove $worktree_path --force"
-  }
-fi
+# Note: Cleanup is automatically handled by the EXIT trap set in Phase 1
+# The trap ensures cleanup happens even if the review fails partway through
 
-# 2. Clean up temporary files
-rm -f shared_context.json
-rm -f *_output.json
-rm -f sorted_findings.json
-
-# 3. Report success
+# Report success
+echo ""
 echo "✅ Multi-agent review complete for PR #$pr_number"
 echo "   Agents used: ${enabled_agents[*]}"
 echo "   Findings posted: $(echo "$sorted_findings" | jq '. | length')"
+echo ""
+echo "🧹 Cleanup will be performed automatically on exit"
 ```
 
 **Output**: Cleanup confirmation
@@ -598,6 +666,28 @@ const CATEGORY_PRIORITY = {
 
 ## Error Handling
 
+### Automatic Cleanup on Failure
+
+All temporary files and worktrees are automatically cleaned up via EXIT trap:
+```bash
+# Set in Phase 1 - runs on any exit (success or failure)
+cleanup_on_exit() {
+  if [ -d "$temp_dir" ]; then
+    rm -rf "$temp_dir"  # Removes session-specific temp files
+  fi
+  if [ -n "$worktree_path" ] && [ -d "$worktree_path" ]; then
+    cd - > /dev/null 2>&1
+    git worktree remove "$worktree_path" --force 2>/dev/null
+  fi
+}
+trap cleanup_on_exit EXIT
+```
+
+**Benefits**:
+- ✅ No orphaned temp files even if review crashes
+- ✅ No orphaned worktrees even if review is interrupted
+- ✅ Safe parallel execution (each session has unique temp directory)
+
 ### Agent Failures
 
 If an agent fails:
@@ -605,7 +695,7 @@ If an agent fails:
 # Continue with other agents (partial results better than none)
 if ! wait "$agent_pid"; then
   echo "⚠️  WARNING: $agent failed, continuing with other agents"
-  echo "{\"agent\": \"$agent\", \"findings\": [], \"metadata\": {\"error\": \"Agent failed\"}}" > "${agent}_output.json"
+  echo "{\"agent\": \"$agent\", \"findings\": [], \"metadata\": {\"error\": \"Agent failed\"}}" > "${temp_dir}/${agent}_output.json"
 fi
 ```
 
