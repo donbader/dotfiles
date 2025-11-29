@@ -1,11 +1,11 @@
 ---
 name: git:review-pr-v3
-description: Comprehensive educational code review using pr-reviewer agent
+description: Comprehensive educational code review workflow
 ---
 
-# Review GitHub Pull Request (v3) - Orchestration Playbook
+# Review GitHub Pull Request (v3)
 
-This command orchestrates the pr-reviewer agent through a multi-phase workflow to perform thorough, context-aware, educational code reviews.
+Perform thorough, context-aware, educational code reviews with multi-phase analysis.
 
 ## Usage
 
@@ -19,15 +19,9 @@ This command orchestrates the pr-reviewer agent through a multi-phase workflow t
 
 **Priority**: Explicit PR URL takes precedence over auto-detection.
 
-## Architecture
-
-- **This file**: High-level orchestration playbook (WHEN to invoke agent, WHAT context to provide)
-- **pr-reviewer agent**: Implementation details (HOW to execute tasks, GitHub CLI commands, templates)
-
 ## Workflow Overview
 
-The review workflow consists of **7 sequential phases**. Each phase invokes the pr-reviewer agent with specific instructions and context.
-
+The review workflow consists of **7 sequential phases**:
 
 ### Phase 1: Setup & PR Detection
 **Sequential** - Must complete before proceeding
@@ -80,48 +74,36 @@ gh pr view "$pr_number" --json title,state || {
 ---
 
 ### Phase 2: Information Gathering
-**Invoke pr-reviewer agent** with parallelization instructions
+**Execute all 5 tasks in parallel**
 
-**Agent Invocation**:
-```
-Task: Execute Phase 2 - Information Gathering
-Context: PR #$pr_number
-Instructions: Execute all 5 tasks in parallel (see pr-reviewer.md Phase 2)
-Expected Output: PR metadata, files changed, diff, review threads, suggested review mode
-```
-
-**What the agent will do** (see pr-reviewer.md for implementation details):
-- Fetch PR metadata: `gh pr view "$pr_number" --json title,body,author,state,isDraft,labels`
-- Fetch files changed: `gh pr view "$pr_number" --json files`
-- Fetch PR diff: `gh pr diff "$pr_number"`
-- Fetch review history via GraphQL for PR #$pr_number
-- Detect review mode based on existing OpenCode reviews
+**Tasks**:
+1. Fetch PR metadata: `gh pr view "$pr_number" --json title,body,author,state,isDraft,labels`
+2. Fetch files changed: `gh pr view "$pr_number" --json files`
+3. Fetch PR diff: `gh pr diff "$pr_number"`
+4. Fetch review history via GraphQL for PR #$pr_number (detect existing OpenCode reviews)
+5. Determine review mode based on review history
 
 **Estimated Time**: ~2-3s (parallel) vs ~10s (sequential)
 
-**Output**: Receive structured data from agent → Use to determine Phase 4 mode selection
+**Output**: PR metadata, files changed, diff, review threads, suggested review mode
 
 ---
 
 ### Phase 3: Context Gathering
-**Invoke pr-reviewer agent** with parallelization instructions
+**Execute in 2 groups: Group A (3 tasks) in parallel, then Group B (2 tasks) in parallel**
 
-**Agent Invocation**:
-```
-Task: Execute Phase 3 - Context Gathering
-Context: PR diff from Phase 2
-Instructions: Execute Group A (3 tasks) in parallel, then Group B (2 tasks) in parallel
-Expected Output: PR intent, codebase patterns with counts, architectural context, comments, history
-```
+**Group A Tasks**:
+1. Parse PR description for intent/constraints
+2. Search codebase for similar patterns (count occurrences)
+3. Check for architectural docs
 
-**What the agent will do** (see pr-reviewer.md for implementation details):
-- Parse PR description for intent/constraints
-- Search codebase for similar patterns (count occurrences)
-- Check for architectural docs and explanatory comments
+**Group B Tasks**:
+1. Extract explanatory comments from changed files
+2. Analyze git history for context
 
 **Estimated Time**: ~5-6s (parallel) vs ~15s (sequential)
 
-**Output**: Context data → Use in Phase 5 for severity assignment
+**Output**: PR intent, codebase patterns with counts, architectural context, comments, history
 
 ---
 
@@ -143,10 +125,10 @@ else
 fi
 ```
 
-**Mode Descriptions**:
-- **first_review**: No previous OpenCode reviews → Comprehensive review
-- **re_review**: Unresolved threads exist (isResolved: false) → Verification focused
-- **incremental_review**: All resolved + new commits → Delta only
+**Modes**:
+- **first_review**: No previous OpenCode reviews → Comprehensive review (7-10 comments)
+- **re_review**: Unresolved threads exist → Verification focused (3 NEW issues max)
+- **incremental_review**: All resolved + new commits → Delta only (5 critical issues max)
 - **no_review_needed**: All resolved + no new commits → Exit early
 
 **Output**: `$review_mode`, scope boundaries for next phases
@@ -154,61 +136,52 @@ fi
 ---
 
 ### Phase 5: Two-Pass Code Analysis
-**Invoke pr-reviewer agent** with review mode and context
+**Pass 1 (parallel): Run all 6 category scans simultaneously**
+**Pass 2 (parallel): Assign severity to each finding using context**
 
-**Agent Invocation**:
-```
-Task: Execute Phase 5 - Two-Pass Code Analysis
-Context: 
-  - Review Mode: $review_mode
-  - PR Number: $pr_number
-  - PR Diff: [from Phase 2]
-  - Context Data: [from Phase 3]
-Instructions: 
-  - Pass 1: Run all 6 category scans in parallel
-  - Pass 2: Assign severity to each finding in parallel using context
-Expected Output: Categorized findings with confidence-based severity
-```
+**Pass 1 Categories**:
+1. Security issues (SQL injection, XSS, auth bypass, etc.)
+2. Bugs (null refs, off-by-one, race conditions, etc.)
+3. Performance (N+1 queries, inefficient loops, memory leaks, etc.)
+4. Architecture (coupling, responsibility violations, etc.)
+5. Testing (missing tests, inadequate coverage, etc.)
+6. Readability (naming, complexity, unclear logic, etc.)
 
-**What the agent will do** (see pr-reviewer.md for implementation details):
-- Pass 1: Scan for patterns in 6 categories (security, bugs, performance, etc.)
-- Pass 2: Assign severity based on context (codebase patterns, PR description, comments)
+**Pass 2 Severity Assignment**:
+- Use context from Phase 3 (patterns, intent, comments)
+- Assign confidence-based severity (critical, major, minor, info)
+- Consider: frequency in codebase, PR intent, existing patterns
 
 **Estimated Time**: ~10-15s (parallel) vs ~60s (sequential)
 
-**Output**: Findings list with severity → Filter in Phase 6
+**Output**: Categorized findings with confidence-based severity
 
 ---
 
 ### Phase 6: Comment Filtering & Posting
-**Invoke pr-reviewer agent** with findings and mode limits
+**Apply mode-specific limits and post review**
 
-**Agent Invocation**:
-```
-Task: Execute Phase 6 - Comment Filtering & Posting
-Context:
-  - Review Mode: $review_mode
-  - PR Number: $pr_number
-  - Findings: [from Phase 5]
-  - Comment Limits: [first_review: 7-10, re_review: 3, incremental_review: 5]
-Instructions: Filter, format, and post comments per mode requirements
-Expected Output: Posted review confirmation
-```
+**Comment Limits**: Enforced based on selected review mode from Phase 4
 
-**What the agent will do** (see pr-reviewer.md for implementation details):
-- Apply comment limits based on $review_mode
-- Filter out intentional patterns and out-of-scope comments
-- Format with educational explanations
-- Post using appropriate GitHub CLI method for PR #$pr_number
+**Filtering Steps**:
+1. Remove intentional patterns (e.g., if codebase has 50+ string concatenations, don't flag one more)
+2. Remove out-of-scope comments (unchanged code, unrelated files)
+3. Sort by severity (critical → major → minor → info)
+4. Apply mode-specific limit
+5. Format with educational explanations
 
-**Re-Review Mode** (when $review_mode = "re_review"):
-- Fetch unresolved OpenCode threads via GraphQL for PR #$pr_number
-- Verify each fix by reading current code
-- Reply in-thread with verification
-- Mark resolved via GraphQL if truly fixed
-- Post verification summary
+**Posting Methods**:
+- **first_review / incremental_review**: `gh pr review "$pr_number" --comment --body "$(cat review.md)"`
+- **re_review**: Reply in-thread, mark resolved via GraphQL, post verification summary
 
-**Output**: Posted review/verification
+**Re-Review Specific Process**:
+1. Fetch unresolved OpenCode threads via GraphQL for PR #$pr_number
+2. Verify each fix by reading current code
+3. Reply in-thread with verification result
+4. Mark resolved via GraphQL if truly fixed
+5. Post verification summary comment
+
+**Output**: Posted review/verification confirmation
 
 ---
 
@@ -238,38 +211,9 @@ echo "✅ Review complete for PR #$pr_number"
 
 ---
 
-## Review Modes (Agent Behavior)
-
-The agent adapts its behavior based on the mode selected in Phase 4:
-
-### First Review
-- **Scope**: Entire PR diff
-- **Comment Limit**: 7-10 meaningful comments
-- **Focus**: All categories (security, bugs, performance, architecture, testing, readability)
-- **Approval**: NEVER directly approve - leave to human
-
-### Re-Review
-- **Scope**: Unresolved threads (`isResolved: false`) + new commits
-- **Comment Limit**: 3 NEW issues only (verification doesn't count)
-- **Focus**: Verify fixes, find new critical issues
-- **Process**: Reply in-thread, mark resolved via GraphQL, post summary
-- **Approval**: NEVER directly approve - leave to human
-
-### Incremental Review
-- **Scope**: ONLY delta since last review (`git diff <last_sha>..HEAD`)
-- **Comment Limit**: 5 comments on critical issues only
-- **Focus**: Critical issues in new code (more lenient than first review)
-- **Approval**: NEVER directly approve - leave to human
-
-### No Review Needed
-- **Trigger**: All resolved + no new commits
-- **Action**: Exit with message "✅ All concerns addressed. No new changes to review."
-
----
-
 ## Performance Optimization
 
-By invoking the agent with parallel execution instructions, we achieve significant time savings:
+Execute tasks in parallel where possible to achieve significant time savings:
 
 | Phase | Sequential | Parallel | Improvement |
 |-------|-----------|----------|-------------|
@@ -278,11 +222,11 @@ By invoking the agent with parallel execution instructions, we achieve significa
 | Phase 5: Code Analysis | ~60s | ~15s | 75% faster |
 | **Total** | **~85-90s** | **~20-25s** | **70-75% faster** |
 
-**Key Insight**: Phases 2, 3, and 5 contain I/O-bound and CPU-bound tasks that can run concurrently. The agent knows how to execute these in parallel when instructed.
+**Key Insight**: Phases 2, 3, and 5 contain I/O-bound and CPU-bound tasks that can run concurrently.
 
 ---
 
-## Example Orchestration Flow
+## Example Execution Flows
 
 ### Example 1: First Review (with URL argument)
 
@@ -296,38 +240,23 @@ use_worktree=true
 worktree_path=".worktree/pr-review-123"
 # Create worktree, validate PR
 
-# Phase 2: Invoke agent for information gathering
-invoke_agent(
-  task="Execute Phase 2 - Information Gathering",
-  context={ pr_number: "$pr_number" },
-  parallel=true
-)
+# Phase 2: Information gathering (parallel execution)
+# Execute: metadata fetch, files fetch, diff fetch, review history, mode detection
 # Receive: metadata, files, diff, threads, mode="first_review"
 
-# Phase 3: Invoke agent for context gathering
-invoke_agent(
-  task="Execute Phase 3 - Context Gathering",
-  context={ diff: [...] },
-  parallel=true
-)
+# Phase 3: Context gathering (parallel execution)
+# Execute: parse intent, search patterns, check docs, extract comments, analyze history
 # Receive: intent, patterns={sql_concat: 12 occurrences}, docs, comments
 
 # Phase 4: Select mode
 REVIEW_MODE="first_review"  # No previous reviews
 
-# Phase 5: Invoke agent for code analysis
-invoke_agent(
-  task="Execute Phase 5 - Two-Pass Code Analysis",
-  context={ mode: "first_review", diff: [...], patterns: {...} },
-  parallel=true
-)
+# Phase 5: Code analysis (parallel execution)
+# Execute: 6 category scans in parallel, then severity assignment in parallel
 # Receive: 17 findings with severity assignments
 
-# Phase 6: Invoke agent for filtering & posting
-invoke_agent(
-  task="Execute Phase 6 - Comment Filtering & Posting",
-  context={ mode: "first_review", findings: [...], limit: 7-10 }
-)
+# Phase 6: Filter & post
+# Execute: apply limit (7-10), filter, format, post
 # Receive: "Posted 7 comments with review summary"
 
 # Phase 7: Cleanup
@@ -356,12 +285,9 @@ REVIEW_MODE="re_review"
 
 # Phase 5: Skip full analysis
 
-# Phase 6: Invoke agent for verification
-invoke_agent(
-  task="Execute Phase 6 - Re-Review Verification",
-  context={ mode: "re_review", pr_number: "$pr_number" }
-)
-# Agent fetches unresolved threads, verifies fixes, posts replies, marks resolved
+# Phase 6: Verification
+# Execute: fetch unresolved threads, verify fixes, post replies, mark resolved
+# Receive: "Verified 3 fixes, posted verification summary"
 
 # Phase 7: Cleanup (no worktree to remove)
 echo "✅ Review complete for PR #$pr_number"
@@ -369,11 +295,187 @@ echo "✅ Review complete for PR #$pr_number"
 
 ---
 
+## GitHub CLI Commands Reference
+
+### PR Information
+```bash
+# Get PR metadata
+gh pr view "$pr_number" --json title,body,author,state,isDraft,labels
+
+# Get files changed
+gh pr view "$pr_number" --json files
+
+# Get PR diff
+gh pr diff "$pr_number"
+
+# Get PR branch name
+gh pr view "$pr_number" --json headRefName -q .headRefName
+```
+
+### Review History (GraphQL)
+```bash
+# Fetch review threads with resolution status
+gh api graphql -f query='
+  query($owner: String!, $repo: String!, $number: Int!) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $number) {
+        reviews(last: 100) {
+          nodes {
+            author { login }
+            body
+            createdAt
+            comments(first: 100) {
+              nodes {
+                body
+                path
+                line
+                isResolved
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+' -f owner="$owner" -f repo="$repo" -F number="$pr_number"
+```
+
+### Posting Reviews
+```bash
+# Post review comment
+gh pr review "$pr_number" --comment --body "$(cat review.md)"
+
+# Reply to thread (use comment ID from GraphQL)
+gh api graphql -f query='
+  mutation($id: ID!, $body: String!) {
+    addPullRequestReviewComment(input: {pullRequestReviewId: $id, body: $body}) {
+      comment { id }
+    }
+  }
+' -f id="$thread_id" -f body="$reply_body"
+
+# Mark thread resolved
+gh api graphql -f query='
+  mutation($id: ID!) {
+    resolveReviewThread(input: {threadId: $id}) {
+      thread { isResolved }
+    }
+  }
+' -f id="$thread_id"
+```
+
+### Git Worktree
+```bash
+# Create worktree
+git worktree add "$worktree_path" "origin/$pr_branch"
+
+# Remove worktree
+git worktree remove "$worktree_path" --force
+```
+
+---
+
+## Comment Templates
+
+### Educational Review Comment Format
+```markdown
+**[Category]**: Issue summary
+
+**Why this matters**: Educational explanation of the impact
+
+**Example**:
+\`\`\`language
+// Current approach
+[problematic code]
+
+// Recommended approach
+[better code]
+\`\`\`
+
+**Resources**: [Link to docs/best practices]
+```
+
+### Verification Reply Format
+```markdown
+✅ **Verified**: [Issue resolved]
+- [Specific change made]
+- [Why it fixes the issue]
+
+OR
+
+⚠️ **Not fully addressed**: [Remaining concern]
+- [What's still needed]
+```
+
+### Review Summary Format
+```markdown
+## OpenCode Review Summary
+
+**Mode**: [first_review | re_review | incremental_review]
+**Comments**: X findings (Y critical, Z major)
+
+### Key Findings
+1. [Category]: [Brief summary]
+2. [Category]: [Brief summary]
+
+**Note**: This is an educational review. Human approval required.
+```
+
+---
+
+## Error Handling
+
+### Common Errors & Solutions
+
+**Error**: No PR found
+- **Solution**: Provide URL or ensure current branch has a PR
+
+**Error**: Invalid URL format
+- **Solution**: Use format `https://github.com/owner/repo/pull/123`
+
+**Error**: Worktree creation fails
+- **Solution**: Check branch exists, run `git fetch origin "$pr_branch"`
+
+**Error**: GraphQL rate limit
+- **Solution**: Wait 60 seconds, retry with exponential backoff
+
+**Error**: Cannot post review
+- **Solution**: Check GitHub token permissions (`gh auth status`)
+
+---
+
+## Success Criteria
+
+### Phase Completion Checks
+
+**Phase 1**: ✅ `$pr_number` extracted, worktree created (if needed), PR validated
+**Phase 2**: ✅ Metadata, files, diff, review history fetched
+**Phase 3**: ✅ Intent parsed, patterns counted, context gathered
+**Phase 4**: ✅ Review mode selected with clear rationale
+**Phase 5**: ✅ Findings categorized with severity assigned
+**Phase 6**: ✅ Comments posted within mode limits
+**Phase 7**: ✅ Worktree removed (if created), success message displayed
+
+### Quality Checks
+
+- **Educational Value**: Every comment explains WHY, not just WHAT
+- **Accuracy**: No false positives from intentional patterns
+- **Scope**: Comments only on changed code (unless architectural)
+- **Actionability**: Each finding includes recommended fix
+- **Tone**: Professional, respectful, educational
+
+---
+
 ## Agent Capabilities Reference
 
-For implementation details on HOW the agent executes each phase, see:
-- **Phase execution instructions**: apps/shared/opencode/.config/opencode/agent/pr-reviewer.md (Phase Execution Instructions section)
-- **GitHub CLI commands**: apps/shared/opencode/.config/opencode/agent/pr-reviewer.md (GitHub CLI Commands Reference section)
-- **Comment templates**: apps/shared/opencode/.config/opencode/agent/pr-reviewer.md (Comment Templates section)
-- **Error handling**: apps/shared/opencode/.config/opencode/agent/pr-reviewer.md (Error Handling section)
-- **Success criteria**: apps/shared/opencode/.config/opencode/agent/pr-reviewer.md (Success Criteria section)
+Any agent executing this command should:
+
+1. **Execute tasks in parallel** where indicated (Phases 2, 3, 5)
+2. **Use GitHub CLI** for all GitHub operations
+3. **Format comments** with educational explanations
+4. **Apply filters** to remove false positives
+5. **Respect mode limits** for comment counts
+6. **Clean up resources** (worktrees) when done
+7. **Handle errors** gracefully with clear messages
+
+For detailed examples of each capability, see the Example Execution Flows section above.
