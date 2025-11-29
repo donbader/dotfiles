@@ -52,24 +52,27 @@ This command is designed to be **parallel-execution safe**, meaning you can run 
 
 ### How It Works
 
-Each review session gets a unique identifier based on:
-- Process ID (`$$`)
-- Unix timestamp (`$(date +%s)`)
+Each review session is identified by PR number:
+- `pr-review-{pr_number}`
 
 Example session IDs:
-- `pr-review-12345-1701234567`
-- `pr-review-12346-1701234568`
+- `pr-review-123`
+- `pr-review-456`
 
 ### Isolated Resources
 
-Each session has its own:
-- **Temporary directory**: `/tmp/opencode-review/pr-review-{pid}-{timestamp}/`
-  - `shared_context.json`
-  - `{agent}_output.json` files
-  - `sorted_findings.json`
+Each PR review has its own:
 - **Worktree** (if using URL mode): `{current_dir}/.worktree/pr-review-{pr_number}/`
   - Created in your current working directory
   - Multiple PRs can have worktrees in the same `.worktree` folder
+- **Review artifacts** (nested inside worktree): `.worktree/pr-review-{pr_number}/.review/`
+  - `shared_context.json`
+  - `{agent}_output.json` files
+  - `sorted_findings.json`
+  - `formatted_findings.json`
+- **Temp directory** (if reviewing current branch): `/tmp/opencode-review/pr-review-{pr_number}/`
+  - Only used when not creating a worktree
+  - Same artifacts as above
 
 ### Example: Running 3 Reviews in Parallel
 
@@ -99,24 +102,6 @@ Each review will:
 
 **Tasks**:
 ```bash
-# 0. Create unique temporary directory for this review session
-# This prevents conflicts when running multiple reviews in parallel
-review_session_id="pr-review-$$-$(date +%s)"
-temp_dir="/tmp/opencode-review/${review_session_id}"
-mkdir -p "$temp_dir"
-
-echo "📁 Review session: $review_session_id"
-echo "📂 Temp directory: $temp_dir"
-
-# Set up cleanup trap to ensure temp files are removed even on failure
-cleanup_on_exit() {
-  if [ -d "$temp_dir" ]; then
-    rm -rf "$temp_dir"
-    echo "🧹 Cleaned up temporary files"
-  fi
-}
-trap cleanup_on_exit EXIT
-
 # 1. Extract PR number from URL argument OR detect from current branch
 if [ -n "$1" ] && [[ "$1" =~ ^https?:// ]]; then
   # Option A: PR number from URL argument
@@ -142,11 +127,11 @@ if [ "$use_worktree" = true ]; then
   fi
   
   # Create worktree in current working directory
-  # Note: Even though we create it here, git tracks worktrees relative to repo root
   current_dir="$(pwd)"
   worktree_path="${current_dir}/.worktree/pr-review-${pr_number}"
   pr_branch=$(gh pr view "$pr_number" --json headRefName -q .headRefName)
   
+  echo "📁 Review session: pr-review-${pr_number}"
   echo "📁 Current directory: $current_dir"
   echo "🌳 Creating worktree at: $worktree_path"
   
@@ -157,16 +142,40 @@ if [ "$use_worktree" = true ]; then
   git worktree add "$worktree_path" "origin/$pr_branch"
   cd "$worktree_path"
   
-  # Add worktree cleanup to trap
+  # Create temp directory INSIDE worktree for review artifacts
+  temp_dir="${worktree_path}/.review"
+  mkdir -p "$temp_dir"
+  
+  # Ensure review artifacts aren't tracked by git
+  echo "*" > "${temp_dir}/.gitignore"
+  
+  echo "📂 Review artifacts: ${temp_dir}"
+  
+  # Set up cleanup trap to remove worktree and all artifacts
+  cleanup_on_exit() {
+    if [ -n "$worktree_path" ] && [ -d "$worktree_path" ]; then
+      cd "$current_dir" > /dev/null 2>&1
+      git worktree remove "$worktree_path" --force 2>/dev/null
+      # Try to remove empty .worktree directory
+      rmdir "${current_dir}/.worktree" 2>/dev/null || true
+      echo "🧹 Cleaned up worktree and review artifacts"
+    fi
+  }
+  trap cleanup_on_exit EXIT
+else
+  # Non-worktree mode: reviewing current branch in place
+  # Use /tmp for review artifacts
+  temp_dir="/tmp/opencode-review/pr-review-${pr_number}"
+  mkdir -p "$temp_dir"
+  
+  echo "📁 Review session: pr-review-${pr_number}"
+  echo "📂 Review artifacts: ${temp_dir}"
+  
+  # Set up cleanup trap for temp files
   cleanup_on_exit() {
     if [ -d "$temp_dir" ]; then
       rm -rf "$temp_dir"
-    fi
-    if [ -n "$worktree_path" ] && [ -d "$worktree_path" ]; then
-      cd - > /dev/null 2>&1
-      git worktree remove "$worktree_path" --force 2>/dev/null
-      # Also try to remove empty .worktree directory
-      rmdir "${current_dir}/.worktree" 2>/dev/null || true
+      echo "🧹 Cleaned up review artifacts"
     fi
   }
   trap cleanup_on_exit EXIT
@@ -179,7 +188,7 @@ gh pr view "$pr_number" --json title,state || {
 }
 ```
 
-**Output**: `$pr_number`, `$worktree_path` (if created), `$use_worktree` flag, `$temp_dir`, `$review_session_id`
+**Output**: `$pr_number`, `$worktree_path` (if created), `$use_worktree` flag, `$temp_dir`
 
 ---
 
@@ -819,25 +828,33 @@ const CATEGORY_PRIORITY = {
 
 ### Automatic Cleanup on Failure
 
-All temporary files and worktrees are automatically cleaned up via EXIT trap:
+All review artifacts and worktrees are automatically cleaned up via EXIT trap:
 ```bash
 # Set in Phase 1 - runs on any exit (success or failure)
+
+# Worktree mode: cleanup removes worktree and nested .review directory
+cleanup_on_exit() {
+  if [ -n "$worktree_path" ] && [ -d "$worktree_path" ]; then
+    cd "$current_dir" > /dev/null 2>&1
+    git worktree remove "$worktree_path" --force 2>/dev/null  # Removes entire worktree including .review/
+    rmdir "${current_dir}/.worktree" 2>/dev/null || true
+  fi
+}
+
+# Non-worktree mode: cleanup removes /tmp artifacts
 cleanup_on_exit() {
   if [ -d "$temp_dir" ]; then
-    rm -rf "$temp_dir"  # Removes session-specific temp files
-  fi
-  if [ -n "$worktree_path" ] && [ -d "$worktree_path" ]; then
-    cd - > /dev/null 2>&1
-    git worktree remove "$worktree_path" --force 2>/dev/null
+    rm -rf "$temp_dir"  # Removes review artifacts from /tmp
   fi
 }
 trap cleanup_on_exit EXIT
 ```
 
 **Benefits**:
-- ✅ No orphaned temp files even if review crashes
+- ✅ No orphaned review artifacts even if review crashes
 - ✅ No orphaned worktrees even if review is interrupted
-- ✅ Safe parallel execution (each session has unique temp directory)
+- ✅ Safe parallel execution (each PR has isolated resources)
+- ✅ Atomic cleanup (removing worktree removes all artifacts)
 
 ### Agent Failures
 
@@ -873,7 +890,7 @@ fi
 **Phase 4**: ✅ All enabled agents completed and returned JSON  
 **Phase 5**: ✅ Findings aggregated, filtered, sorted  
 **Phase 6**: ✅ Review posted with inline comments  
-**Phase 7**: ✅ Worktree removed, temp files cleaned
+**Phase 7**: ✅ Worktree removed, review artifacts cleaned
 
 ### Review Quality
 
