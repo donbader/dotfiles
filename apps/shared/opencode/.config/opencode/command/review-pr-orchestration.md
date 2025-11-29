@@ -461,7 +461,7 @@ Result: 3 agents (comprehensive review)
 
 ## Aggregation Strategy Details
 
-### Severity Hierarchy (Option A)
+### Severity Hierarchy
 
 When multiple agents flag the same line:
 
