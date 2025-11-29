@@ -3,34 +3,30 @@
 ## Parse Command Arguments
 
 Check if user provided a PR URL argument:
-
 ```bash
-# Check for PR URL argument (anything after the command)
-if [ -n "$1" ]; then
-  # User provided URL: /git:review-pr-v2 https://github.com/owner/repo/pull/123
-  pr_url="$1"
-  pr_number=$(echo "$pr_url" | grep -oE '[0-9]+$')
-  use_worktree=true
-  echo "Using provided PR URL: $pr_url"
-else
-  # No URL provided: /git:review-pr-v2
-  # Auto-detect PR for current branch
-  pr_data=$(gh pr view --json url,number -q '{url: .url, number: .number}' 2>&1)
-  
-  if echo "$pr_data" | grep -q "no pull requests found"; then
-    echo "Error: No PR found for current branch"
-    echo ""
-    echo "Please either:"
-    echo "  1. Provide a PR URL: /git:review-pr-v2 https://github.com/owner/repo/pull/123"
-    echo "  2. Create a PR for this branch: gh pr create"
-    exit 1
-  fi
-  
-  pr_url=$(echo "$pr_data" | jq -r .url)
-  pr_number=$(echo "$pr_data" | jq -r .number)
-  use_worktree=false
-  echo "Auto-detected PR for current branch: $pr_url"
+pr_number=$(echo "$pr_url" | grep -oE '[0-9]+$')
+use_worktree=true
+echo "Using provided PR URL: $pr_url"
+```
+
+If no PR URL provided:
+```bash
+# Auto-detect PR for current branch
+pr_data=$(gh pr view --json url,number -q '{url: .url, number: .number}' 2>&1)
+
+if echo "$pr_data" | grep -q "no pull requests found"; then
+  echo "Error: No PR found for current branch"
+  echo ""
+  echo "Please either:"
+  echo "  1. Provide a PR URL: /git:review-pr-v2 https://github.com/owner/repo/pull/123"
+  echo "  2. Create a PR for this branch: gh pr create"
+  exit 1
 fi
+
+pr_url=$(echo "$pr_data" | jq -r .url)
+pr_number=$(echo "$pr_data" | jq -r .number)
+use_worktree=false
+echo "Auto-detected PR for current branch: $pr_url"
 ```
 
 ## Setup Worktree (if needed)

@@ -10,7 +10,7 @@
 
 ## For First Reviews
 
-For the canonical `gh` CLI patterns used here (and in other phases), see **{file:./gh-commands.md}**.
+For the canonical `gh` CLI patterns used here (and in other phases), see **@~/.config/opencode/command/review-pr-v2/gh-commands.md**.
 
 ```bash
 # Get repository info
