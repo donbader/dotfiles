@@ -211,11 +211,57 @@ gh pr view "$pr_number" --json title,state || {
 
 **Tasks**:
 1. Parse PR intent and constraints from description
-2. Search codebase for patterns (count occurrences)
-3. Identify architectural patterns and documentation
-4. Analyze diff for statistical summary
-5. Determine focus areas based on PR content
-6. Build shared context JSON object
+2. Analyze changed files to identify relevant codebase areas
+3. Gather contextual code from related modules/files
+4. Search for relevant patterns in the codebase (count occurrences)
+5. Identify architectural patterns and documentation
+6. Analyze diff for statistical summary
+7. Determine focus areas based on PR content
+8. Build shared context JSON object
+
+**Context Gathering Strategy**:
+
+For each changed file, gather relevant context:
+- **If changing a specific module** (e.g., `crawler/config.ts`):
+  - Include the full implementation of the changed module
+  - Find related files (imports, exports, usage)
+  - Show how the module is used in the codebase (call sites)
+  - Include relevant tests if they exist
+  
+- **If changing configuration**:
+  - Show how configuration is loaded and used
+  - Include examples of existing configurations
+  - Show the runtime flow that uses the config
+  
+- **If changing database/repository layer**:
+  - Include related schema/migration files
+  - Show service layer that uses the repository
+  - Include similar repository patterns for consistency
+  
+- **If changing API endpoints**:
+  - Include related middleware and validators
+  - Show the full request/response flow
+  - Include authentication/authorization patterns
+
+**Example Context Gathering**:
+```bash
+# For each changed file, gather contextual information
+for file in "${files_changed[@]}"; do
+  # 1. Identify the module/component being changed
+  module_path=$(dirname "$file")
+  module_name=$(basename "$module_path")
+  
+  # 2. Find related files (same directory, imports, usages)
+  related_files=$(rg -l "import.*$(basename "$file" .ts)" --type ts || true)
+  import_files=$(rg "^import.*from" "$file" | awk -F"'" '{print $2}' || true)
+  
+  # 3. Gather full implementation of key related files
+  # (limit to avoid context overflow - top 5 most relevant)
+  
+  # 4. Find usage examples
+  usage_examples=$(rg -A 3 "$(basename "$file" .ts)\." --type ts | head -20 || true)
+done
+```
 
 **Context Object Structure** (see `shared/context-schema.md`):
 ```json
@@ -229,15 +275,56 @@ gh pr view "$pr_number" --json title,state || {
   },
   "files_changed": [ ... ],
   "diff_summary": { ... },
+  "related_code_context": {
+    "crawler/config.ts": {
+      "full_file_content": "...",
+      "related_files": [
+        {
+          "path": "crawler/index.ts",
+          "content": "...",
+          "relationship": "Imports and uses CrawlerConfig"
+        },
+        {
+          "path": "crawler/worker.ts", 
+          "content": "...",
+          "relationship": "Uses crawler configuration"
+        }
+      ],
+      "usage_examples": [
+        {
+          "file": "services/scraper.ts",
+          "line": 42,
+          "code": "const config = new CrawlerConfig(options);"
+        }
+      ],
+      "tests": [
+        {
+          "path": "crawler/__tests__/config.test.ts",
+          "content": "..."
+        }
+      ]
+    }
+  },
   "codebase_patterns": {
     "string_concatenation_for_queries": { "count": 12, "examples": [...] }
   },
-  "architectural_context": { ... },
+  "architectural_context": {
+    "module_structure": "...",
+    "common_patterns": "...",
+    "documentation": "..."
+  },
   "review_history": { ... }
 }
 ```
 
 **Output**: Shared context JSON object stored in `$temp_dir/shared_context.json`
+
+**Context Size Management**:
+- Limit each changed file's context to ~500 lines of related code
+- Prioritize: direct dependencies > usage examples > tests > similar patterns
+- If PR changes >10 files, focus on top 10 most significant changes
+- Include full content for small files (<100 lines)
+- Include excerpts for large files (most relevant sections)
 
 ---
 

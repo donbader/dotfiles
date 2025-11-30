@@ -64,6 +64,47 @@ The shared context provides all agents with the same foundational information ab
     }
   },
   
+  "related_code_context": {
+    "src/auth/oauth.ts": {
+      "full_file_content": "// Complete file content for new files...",
+      "related_files": [
+        {
+          "path": "src/auth/types.ts",
+          "content": "export interface AuthProvider { ... }",
+          "relationship": "Defines types used by oauth.ts",
+          "lines": 45
+        },
+        {
+          "path": "src/auth/session.ts",
+          "content": "export class SessionManager { ... }",
+          "relationship": "OAuth integrates with existing session management",
+          "lines": 120
+        }
+      ],
+      "usage_examples": [
+        {
+          "file": "src/routes/auth.ts",
+          "line": 42,
+          "code": "const oauth = new OAuthProvider(config);\nawait oauth.authenticate(req);"
+        }
+      ],
+      "tests": [
+        {
+          "path": "src/auth/__tests__/oauth.test.ts",
+          "content": "describe('OAuthProvider', () => { ... })",
+          "coverage": "85%"
+        }
+      ],
+      "similar_implementations": [
+        {
+          "path": "src/auth/saml.ts",
+          "reason": "Similar authentication provider pattern",
+          "key_differences": "SAML uses XML, OAuth uses JSON"
+        }
+      ]
+    }
+  },
+  
   "codebase_patterns": {
     "string_concatenation_for_queries": {
       "count": 12,
@@ -136,6 +177,35 @@ List of all modified files with diff patches. Agents analyze these for issues.
 
 ### `diff_summary`
 Statistical summary of changes. Helps agents understand PR size and scope.
+
+### `related_code_context`
+**NEW**: For each changed file, provides relevant surrounding code context to help agents understand how the changes fit into the broader codebase.
+
+**Purpose**: Agents shouldn't review code in isolation. They need to understand:
+- What code depends on the changed file (usage examples)
+- What code the changed file depends on (imports, types)
+- How similar functionality is implemented elsewhere (patterns)
+- What tests exist for this code
+
+**Structure per changed file**:
+- `full_file_content`: Complete content for new/small files (<100 lines)
+- `related_files`: Dependencies and dependents with their content
+  - Prioritizes: direct imports > usage sites > type definitions
+  - Includes relationship explanation
+- `usage_examples`: Real examples of how this code is used in the codebase
+- `tests`: Related test files and coverage info
+- `similar_implementations`: Comparable patterns elsewhere for consistency checking
+
+**Example Use Cases**:
+1. **Configuration changes**: Show how config is loaded and used at runtime
+2. **API changes**: Show full request/response flow, middleware, validators  
+3. **Database changes**: Show repository layer, service layer, migrations
+4. **Utility functions**: Show call sites and how similar utilities are implemented
+
+**Context Size Limits**:
+- Max 500 lines of context per changed file
+- Max 10 changed files with context (prioritize most significant)
+- Prefer excerpts over full files for large modules
 
 ### `codebase_patterns`
 Patterns found across the codebase with occurrence counts. Critical for confidence-based severity assignment.
