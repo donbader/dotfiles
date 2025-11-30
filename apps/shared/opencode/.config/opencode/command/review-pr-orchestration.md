@@ -353,8 +353,8 @@ echo "✅ All agents completed"
 
 ---
 
-### Phase 5: Aggregation, Filtering & Formatting
-**Sequential** - Intelligent result combination and comment formatting
+### Phase 5: AI-Powered Aggregation, Filtering & Formatting
+**AI Agent Decision-Making** - Intelligent curation of final review comments
 
 #### Step 1: Collect All Findings
 
@@ -370,79 +370,213 @@ echo "📊 Collected findings:"
 echo "  - Total findings: $(echo "${all_findings[@]}" | jq '. | length')"
 ```
 
-#### Step 2: Apply Severity Hierarchy (Resolve Conflicts)
+#### Step 2: AI-Powered Aggregation & Filtering
 
-When multiple agents comment on the same line, keep highest severity:
+Invoke an AI agent to make **all decisions** about which findings to keep, merge, or discard:
 
 ```bash
-# Severity ranking: critical > important > suggestion > question
-severity_rank() {
-  case "$1" in
-    critical) echo 4 ;;
-    important) echo 3 ;;
-    suggestion) echo 2 ;;
-    question) echo 1 ;;
-    *) echo 0 ;;
-  esac
+echo "🤖 Invoking AI Aggregator to curate final review comments..."
+
+# Invoke AI agent with ALL findings + full context
+aggregation_result=$(/task agent:review-aggregator "
+You are an expert code review aggregator. Your job is to take ALL findings from multiple specialist agents and decide:
+1. **Which comments should be posted** (keep)
+2. **Which comments should be discarded** (too minor, false positive, out of scope)
+3. **Which comments should be merged** (related issues on same line)
+
+**All Raw Findings** (from all agents):
+$(echo "${all_findings[@]}" | jq -c '.')
+
+**PR Context** (use this to make informed decisions):
+$(cat ${temp_dir}/shared_context.json)
+
+**Your Decision-Making Responsibilities**:
+
+### 1. Relevance Filtering
+Decide if each finding should be posted or discarded based on:
+- **Scope**: Is it in a file that was actually changed in this PR?
+- **Confidence**: Is the agent confident enough (generally >60%)?
+- **Signal vs Noise**: Is this a real issue or nitpicking?
+- **Intentional Patterns**: Does codebase_patterns show this is an accepted pattern (many occurrences)?
+- **PR Intent**: Does this align with what the PR is trying to accomplish?
+
+Examples to DISCARD:
+- Suggesting a pattern refactor when codebase has 50+ instances of that pattern
+- Style nitpicks when PR is a critical security fix
+- Low confidence suggestions (<60%)
+- Comments on unchanged code (check files_changed)
+- False positives based on PR context
+
+Examples to KEEP:
+- Security vulnerabilities (always keep, even low confidence)
+- Performance issues that match PR scope
+- Code quality issues that are clear wins
+- Anything aligned with PR intent/constraints
+
+### 2. Conflict Resolution (Same Line, Multiple Findings)
+When multiple agents comment on the same line:
+
+**Option A: MERGE** (if related - same root cause):
+- Combine into one rich comment with multiple perspectives
+- Example: SQL injection + missing index → both about query construction
+- Example: Auth bypass + session security → both about authentication
+- Preserve insights from all agents
+
+**Option B: KEEP HIGHEST SEVERITY** (if independent - different root causes):
+- Discard lower severity findings to avoid clutter
+- Example: Security critical + naming suggestion → keep security only
+- Example: Performance issue + comment style → keep performance only
+
+**Option C: KEEP BOTH SEPARATE** (if both critical and independent):
+- Rare case: both findings are critical but address different issues
+- Example: Two separate security vulnerabilities on same line
+
+### 3. De-duplication (Same Issue, Different Locations)
+If multiple findings describe the same issue across different files:
+- Keep the most severe/representative example
+- Add note: \"Similar issue found in X other files\"
+- Avoid overwhelming developer with repetitive comments
+
+### 4. Output Format
+
+Return **ONLY** the findings that should be posted (after all filtering, merging, de-duplication):
+
+{
+  \"final_findings\": [
+    {
+      \"action\": \"keep\" | \"merge\" | \"discard\",
+      \"file\": \"path/to/file\",
+      \"line_start\": 42,
+      \"line_end\": 45,
+      \"severity\": \"critical|important|suggestion|question\",
+      \"confidence\": 85,
+      \"category\": \"security-sql-injection\",
+      \"title\": \"Brief title\",
+      
+      // If merged:
+      \"is_merged\": true,
+      \"agents\": [\"security-reviewer\", \"performance-reviewer\"],
+      \"original_finding_count\": 2,
+      
+      // Combined/preserved fields:
+      \"issue\": \"...\",
+      \"why_it_matters\": \"...\",
+      \"fix\": \"...\",
+      \"fix_code\": \"...\",
+      \"fix_code_language\": \"typescript\",
+      \"learning\": \"...\",
+      \"references\": [...],
+      \"attack_example\": \"...\",
+      \"attack_example_language\": \"...\",
+      \"performance_impact\": \"...\"
+    }
+  ],
+  \"discarded_findings\": [
+    {
+      \"title\": \"...\",
+      \"reason\": \"Low confidence (45%), likely false positive\",
+      \"agent\": \"code-quality-reviewer\"
+    }
+  ],
+  \"metadata\": {
+    \"total_raw_findings\": 50,
+    \"kept\": 12,
+    \"merged\": 3,
+    \"discarded\": 35,
+    \"discard_reasons\": {
+      \"low_confidence\": 10,
+      \"out_of_scope\": 8,
+      \"intentional_pattern\": 12,
+      \"duplicate\": 3,
+      \"too_minor\": 2
+    },
+    \"summary\": \"Filtered 50 raw findings down to 12 high-value comments. Merged 3 groups of related findings. Discarded 35 low-value findings (mostly intentional patterns and low confidence).\"
+  }
 }
 
-# Group findings by file+line, keep highest severity
-deduplicated_findings=$(echo "${all_findings[@]}" | jq -s '
-  group_by(.file + ":" + (.line_start | tostring)) |
-  map(
-    max_by(
-      if .severity == "critical" then 4
-      elif .severity == "important" then 3
-      elif .severity == "suggestion" then 2
-      else 1
-      end
-    )
-  )
-')
+**Important Guidelines**:
+- **Be ruthless with filtering** - only keep findings that genuinely help the developer
+- **Be generous with merging** - combine related insights for richer feedback
+- **Explain your decisions** - provide clear reasoning in discard_reasons
+- **Prioritize security** - never discard security findings unless clearly false positive
+- **Respect PR scope** - don't derail PR with unrelated issues
+- **Use context** - leverage codebase_patterns, PR intent, and constraints
+")
+
+# Extract final findings
+final_findings=$(echo "$aggregation_result" | jq -r '.final_findings')
+
+# Log aggregation summary
+echo "✅ AI Aggregation complete:"
+echo "$aggregation_result" | jq -r '.metadata | 
+  "  - Total raw findings: \(.total_raw_findings)",
+  "  - Kept: \(.kept)",
+  "  - Merged: \(.merged)",
+  "  - Discarded: \(.discarded)",
+  "",
+  "  Discard breakdown:",
+  "    • Low confidence: \(.discard_reasons.low_confidence)",
+  "    • Out of scope: \(.discard_reasons.out_of_scope)",
+  "    • Intentional pattern: \(.discard_reasons.intentional_pattern)",
+  "    • Duplicate: \(.discard_reasons.duplicate)",
+  "    • Too minor: \(.discard_reasons.too_minor)",
+  "",
+  "  Summary: \(.summary)"
+'
+
+# Save discarded findings for transparency
+echo "$aggregation_result" | jq '.discarded_findings' > "${temp_dir}/discarded_findings.json"
+
+echo ""
+echo "💡 Review discarded findings: ${temp_dir}/discarded_findings.json"
 ```
 
-#### Step 3: Filter Irrelevant Comments
+**AI Agent's Full Responsibilities**:
+
+1. ✅ **Filter irrelevant findings** (out of scope, low confidence, intentional patterns)
+2. ✅ **Resolve conflicts** (merge related, keep highest severity for independent)
+3. ✅ **De-duplicate** (same issue across multiple files)
+4. ✅ **Merge related findings** (same root cause, complementary insights)
+5. ✅ **Prioritize security** (never discard real vulnerabilities)
+6. ✅ **Respect PR scope** (align with PR intent and constraints)
+7. ✅ **Explain decisions** (transparent reasoning for discards)
+8. ✅ **Generate final curated list** (only high-value comments)
+
+**Why This Is Better**:
+
+| Old Approach | New Approach (AI-Powered) |
+|--------------|---------------------------|
+| Hardcoded rules (confidence >60) | Context-aware decisions |
+| Simple keyword matching | Semantic understanding |
+| Can't judge "intentional pattern" | Uses codebase_patterns intelligently |
+| Misses related findings | Merges complementary insights |
+| No explanation | Transparent reasoning |
+| Rigid filtering | Flexible, intelligent curation |
+
+#### Step 3: Sort by Severity
+
+AI agent already filtered and curated findings. Now just sort by severity for presentation:
 
 ```bash
-# Orchestrator decides what to keep based on:
-# 1. Confidence threshold (keep if confidence >= 60)
-# 2. Relevance to PR scope (changed files only)
-# 3. Not commenting on intentional patterns (check codebase_patterns)
-
-filtered_findings=$(echo "$deduplicated_findings" | jq '[
-  .[] |
-  select(
-    .confidence >= 60 and
-    (.file | IN($files_changed[])) and
-    (
-      # Keep if pattern is rare (< 5 occurrences)
-      (.category as $cat | 
-       ($codebase_patterns | has($cat) | not) or
-       ($codebase_patterns[$cat].count < 5)
-      )
-    )
-  )
-]')
-
-echo "🔍 After filtering:"
-echo "  - Remaining findings: $(echo "$filtered_findings" | jq '. | length')"
-```
-
-#### Step 4: Sort by Severity
-
-```bash
-sorted_findings=$(echo "$filtered_findings" | jq 'sort_by(
+sorted_findings=$(echo "$final_findings" | jq 'sort_by(
   if .severity == "critical" then 0
   elif .severity == "important" then 1
   elif .severity == "suggestion" then 2
   else 3
   end
 )')
+
+echo "📊 Final findings ready for formatting:"
+echo "  - Total: $(echo "$sorted_findings" | jq 'length')"
+echo "  - Critical: $(echo "$sorted_findings" | jq '[.[] | select(.severity == "critical")] | length')"
+echo "  - Important: $(echo "$sorted_findings" | jq '[.[] | select(.severity == "important")] | length')"
+echo "  - Suggestions: $(echo "$sorted_findings" | jq '[.[] | select(.severity == "suggestion")] | length')"
+echo "  - Questions: $(echo "$sorted_findings" | jq '[.[] | select(.severity == "question")] | length')"
 ```
 
-#### Step 5: Format Comment Bodies
+#### Step 4: Format Comment Bodies
 
-The orchestrator now formats each finding into a complete, styled comment body:
+The orchestrator now formats each finding into a complete, styled comment body (handles both merged and single findings):
 
 ```bash
 # Format each finding into a complete markdown comment
@@ -454,6 +588,13 @@ formatted_findings=$(echo "$sorted_findings" | jq -r '.[] |
    else "❓"
    end) as $emoji |
   
+  # Determine agent attribution (handle merged findings)
+  (if .is_merged then
+    (.agents | join(", "))
+   else
+    (.agent // "unknown")
+   end) as $agent_list |
+  
   # Build comment body
   {
     file: .file,
@@ -463,8 +604,15 @@ formatted_findings=$(echo "$sorted_findings" | jq -r '.[] |
     confidence: .confidence,
     category: .category,
     title: .title,
+    is_merged: (.is_merged // false),
     body: (
       $emoji + " **" + (.severity | ascii_upcase) + " - " + .title + "**\n\n" +
+      
+      # Add merged indicator if applicable
+      (if .is_merged then
+        "🔗 *Multiple agents identified related issues on this line*\n\n"
+      else "" end) +
+      
       "**Issue**: " + .issue + "\n\n" +
       "**Why this matters**: " + .why_it_matters + "\n\n" +
       
@@ -496,8 +644,15 @@ formatted_findings=$(echo "$sorted_findings" | jq -r '.[] |
         "**References**:\n" + (.references | map("- " + .) | join("\n")) + "\n\n"
       else "" end) +
       
-      # Footer
-      "---\n*🤖 Generated by OpenCode (" + .agent + ")*"
+      # Footer with agent attribution
+      "---\n*🤖 Generated by OpenCode (" + $agent_list + ")*" +
+      
+      # Add resolution method indicator for debugging
+      (if .is_merged then
+        "\n*✨ Context-aware merge: Related findings combined*"
+      elif .resolution_reason == "independent_issues" then
+        "\n*🎯 Context-aware filter: Kept highest severity of independent findings*"
+      else "" end)
     )
   }
 ')
@@ -511,23 +666,33 @@ echo "$formatted_findings" > "${temp_dir}/formatted_findings.json"
 The orchestrator generates fully-formatted markdown comments with:
 - ✅ Severity emoji (🚨 ⚠️ 💡 ❓)
 - ✅ Title with severity level
-- ✅ Issue description
+- ✅ Merge indicator (when multiple agents agree on related issues)
+- ✅ Issue description (combined when merged)
 - ✅ Impact explanation
 - ✅ Attack examples (for security findings)
 - ✅ Performance metrics (for performance findings)
-- ✅ Fix description
+- ✅ Fix description (primary + additional considerations when merged)
 - ✅ Code examples with syntax highlighting
 - ✅ Learning/educational takeaway
 - ✅ References to docs or codebase examples
-- ✅ Footer with agent attribution
+- ✅ Footer with agent attribution (shows all agents for merged findings)
+- ✅ Resolution method indicator (merge vs filter)
 
-**Example Generated Comment**:
+**Example 1: Merged Comment (Related Findings)**:
 ```markdown
-🚨 **CRITICAL - SQL injection vulnerability in user lookup**
+🚨 **CRITICAL - Multiple related issues: SQL injection vulnerability + Missing database index**
 
-**Issue**: User input concatenated directly into SQL query without parameterization
+🔗 *Multiple agents identified related issues on this line*
+
+**Issue**: Multiple agents identified related issues:
+
+**security-reviewer**: User input concatenated directly into SQL query without parameterization
+
+**performance-reviewer**: Query uses unindexed column lookup, causing full table scan
 
 **Why this matters**: Attacker can execute arbitrary SQL, read/modify/delete any data in database. This is OWASP Top 10 #1.
+
+Query performance degrades significantly with table growth. Current O(n) lookup will cause timeouts at scale.
 
 **Attack example**:
 ```typescript
@@ -536,7 +701,17 @@ The orchestrator generates fully-formatted markdown comments with:
 // Returns ALL users
 ```
 
+**Performance impact**:
+```
+Current: Full table scan (1M rows = 5000ms)
+With fix: Index lookup (1M rows = 2ms)
+```
+
 **Fix**: Use parameterized queries to prevent SQL injection
+
+Additional considerations:
+- Add database index on user_id column for O(1) lookups
+- Consider query result caching for frequently accessed users
 
 ```typescript
 const query = 'SELECT * FROM users WHERE id = ?';
@@ -545,8 +720,48 @@ const result = await db.query(query, [userId]);
 
 **Learning**: Never concatenate user input into SQL. Always use parameterized queries or an ORM to prevent SQL injection.
 
+Indexing foreign keys and frequently queried columns is essential for performance at scale.
+
 **References**:
 - OWASP SQL Injection: https://owasp.org/www-community/attacks/SQL_Injection
+- Database Indexing Best Practices: https://use-the-index-luke.com/
+- See UserRepository.ts:42 for example of parameterized queries
+
+---
+*🤖 Generated by OpenCode (security-reviewer, performance-reviewer)*
+*✨ Context-aware merge: Related findings combined*
+```
+
+**Example 2: Independent Finding (Highest Severity Kept)**:
+```markdown
+🚨 **CRITICAL - Hardcoded credentials in configuration**
+
+**Issue**: Database password hardcoded in source code
+
+**Why this matters**: Credentials in source control are accessible to anyone with repository access. If leaked, attackers gain full database access.
+
+**Fix**: Move credentials to environment variables
+
+```typescript
+// Before
+const dbPassword = "super_secret_password_123";
+
+// After
+const dbPassword = process.env.DB_PASSWORD;
+```
+
+**Learning**: Never commit credentials to source control. Use environment variables or secret management systems.
+
+**References**:
+- OWASP: Use of Hard-coded Credentials
+- 12-Factor App: Store config in environment
+
+---
+*🤖 Generated by OpenCode (security-reviewer)*
+*🎯 Context-aware filter: Kept highest severity of independent findings*
+```
+
+*(In this case, code-quality-reviewer also flagged the same line for poor variable naming, but since it's unrelated to the security issue and has lower severity, it was filtered out)*
 - See UserRepository.ts:42 for example of parameterized queries
 
 ---
@@ -782,44 +997,137 @@ Result: 3 agents (comprehensive review)
 
 ## Aggregation Strategy Details
 
-### Severity Hierarchy
+### Context-Aware Resolution (v4.1)
 
-When multiple agents flag the same line:
+Unlike simple severity hierarchy, v4.1 uses **intelligent context analysis** to decide whether to merge or filter findings:
+
+#### Decision Tree
 
 ```
-security-reviewer:     🚨 Critical - SQL injection
-performance-reviewer:  💡 Suggestion - Use prepared statements
-
-Result: Keep security-reviewer finding (Critical > Suggestion)
+Multiple findings on same line?
+├─ NO → Keep as-is (no conflict)
+└─ YES → Analyze relationship
+    ├─ Related findings (same root cause)?
+    │   ├─ Share fix keywords? (parameterized, index, cache, etc.)
+    │   ├─ Share category family? (sql-*, auth-*, etc.)
+    │   └─ Share issue concepts? (4+ common words)
+    │   → YES → MERGE into rich combined comment
+    └─ Independent findings (different issues)?
+        → Keep highest severity only (avoid clutter)
 ```
 
-**Rationale**: 
-- Security issues are more critical than performance
-- Performance issues are more critical than code quality
-- Avoid overwhelming developer with multiple comments on same line
+#### Example: Related Findings → MERGE
 
-### Conflict Resolution
+```
+security-reviewer:     🚨 Critical - SQL injection (use parameterized queries)
+performance-reviewer:  ⚠️ Important - Missing index (use parameterized queries with index)
+
+Analysis:
+✓ Share fix keywords: "parameterized", "queries"
+✓ Share category family: "sql-*"
+✓ Both address database query construction
+
+Result: MERGE
+→ One comment with both security and performance insights
+→ Combined fix: "Use parameterized queries AND add database index"
+→ Footer shows: "security-reviewer, performance-reviewer"
+```
+
+#### Example: Independent Findings → FILTER
+
+```
+security-reviewer:      🚨 Critical - Hardcoded credentials (use env vars)
+code-quality-reviewer:  💡 Suggestion - Poor variable naming (rename to dbPassword)
+
+Analysis:
+✗ Different fix keywords: "environment" vs "rename"
+✗ Different categories: "credentials" vs "naming"
+✗ No issue overlap: security vs readability
+
+Result: KEEP HIGHEST SEVERITY
+→ Keep security finding only (Critical > Suggestion)
+→ Avoid overwhelming developer with unrelated issues on same line
+→ Footer shows: "security-reviewer"
+```
+
+### Relatedness Detection Algorithm
+
+**Keywords Checked** (indicate same root cause):
+```bash
+# Security-related
+"parameterized", "prepare", "validation", "sanitize", "escape", "hash", "encrypt"
+
+# Performance-related
+"index", "cache", "async", "await", "optimize"
+
+# Code quality
+"refactor", "extract", "rename", "simplify"
+```
+
+**Category Families**:
+```bash
+# Examples of related categories (share prefix)
+sql-injection, sql-performance → Related (both "sql-*")
+auth-session, auth-jwt → Related (both "auth-*")
+crypto-weak, crypto-timing → Related (both "crypto-*")
+
+# Examples of unrelated categories
+sql-injection, naming-convention → Unrelated
+auth-credentials, performance-loop → Unrelated
+```
+
+**Similarity Threshold**:
+- **MERGE** if: 1+ shared fix keywords OR same category family OR 4+ shared issue words
+- **FILTER** if: None of the above (keep highest severity)
+
+### Benefits Over Simple Hierarchy
+
+| Feature | Simple Hierarchy (Old) | Context-Aware (New) |
+|---------|----------------------|---------------------|
+| **Information Loss** | High (discards lower severity) | Low (merges related findings) |
+| **Developer Experience** | May miss related insights | Gets complete picture |
+| **Comment Quality** | One perspective | Multiple expert perspectives |
+| **False Positives** | Same | Reduced (better filtering) |
+| **Execution Time** | Fast | Slightly slower (worth it) |
+
+**Example Impact**:
+
+Old approach (SQL injection + missing index):
+```
+❌ Security finding kept
+❌ Performance finding discarded
+→ Developer fixes SQL injection but misses performance issue
+```
+
+New approach:
+```
+✅ Both findings merged into one rich comment
+✅ Developer fixes both issues in one pass
+→ Better code quality, fewer review cycles
+```
+
+### Conflict Resolution Priority
+
+When findings cannot be merged, priority order:
 
 ```javascript
-// Priority order
-const SEVERITY_PRIORITY = {
-  'critical': 100,
-  'important': 75,
-  'suggestion': 50,
-  'question': 25
+// 1. Severity (highest priority)
+const SEVERITY_RANK = {
+  'critical': 4,
+  'important': 3,
+  'suggestion': 2,
+  'question': 1
 };
 
-// Category priority (within same severity)
+// 2. Category (within same severity)
 const CATEGORY_PRIORITY = {
   'security': 3,
   'performance': 2,
   'code-quality': 1
 };
 
-// Keep finding with:
-// 1. Highest severity
-// 2. If tied, highest category priority
-// 3. If tied, highest confidence
+// 3. Confidence (tie-breaker)
+// Higher confidence wins
 ```
 
 ---
@@ -923,29 +1231,33 @@ fi
 
 ## Files Reference
 
-**Agent files**:
-- `agent/code-quality-reviewer.md` - Architecture, modularity, readability, testing
-- `agent/security-reviewer.md` - Security vulnerabilities, OWASP Top 10
-- `agent/performance-reviewer.md` - Performance issues, algorithmic complexity
+**Specialist Agent files**:
+- `agent/pr-reviewers/code-quality-reviewer.md` - Architecture, modularity, readability, testing
+- `agent/pr-reviewers/security-reviewer.md` - Security vulnerabilities, OWASP Top 10
+- `agent/pr-reviewers/performance-reviewer.md` - Performance issues, algorithmic complexity
+
+**Aggregator Agent**:
+- `agent/pr-reviewers/review-aggregator.md` - AI agent that filters, merges, and curates final findings
 
 **Shared knowledge**:
 - `shared/reviewer-base.md` - Common principles, output format, tone
 - `shared/context-schema.md` - Shared context structure
 
 **Orchestrator**:
-- `command/review-pr-v4-multi-agent.md` - This file (workflow orchestration)
+- `command/review-pr-orchestration.md` - This file (workflow orchestration)
 
 ---
 
 ## Summary
 
-This multi-agent review system:
+This multi-agent review system with **AI-powered aggregation**:
 
 1. **Selects** appropriate specialist agents based on PR content
 2. **Gathers** shared context once for all agents
-3. **Spawns** agents in parallel for speed
-4. **Aggregates** results using severity hierarchy
-5. **Filters** irrelevant findings using context
-6. **Posts** unified review with educational comments
+3. **Spawns** specialist agents in parallel for speed
+4. **Invokes AI aggregator** to intelligently filter, merge, and curate findings
+5. **Posts** unified review with only high-value, actionable comments
 
-**Result**: Faster, deeper, more accurate code reviews through specialization and parallelization.
+**Key Innovation**: AI aggregator makes all final decisions about what to keep, what to merge, and what to discard - resulting in high signal-to-noise ratio reviews.
+
+**Result**: Faster, deeper, more accurate code reviews through specialization, parallelization, and intelligent curation.
