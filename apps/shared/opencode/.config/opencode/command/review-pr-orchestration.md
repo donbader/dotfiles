@@ -196,13 +196,13 @@ gh pr view "$pr_number" --json title,state || {
 **Execute all tasks in parallel**
 
 **Tasks**:
-1. Fetch PR metadata: `gh pr view "$pr_number" --json title,body,author,state,isDraft,labels,baseRefName,headRefName`
+1. Fetch PR metadata: `gh pr view "$pr_number" --json title,body,author,state,isDraft,labels,baseRefName,headRefName,headRefOid`
 2. Fetch files changed: `gh pr view "$pr_number" --json files`
 3. Fetch PR diff: `gh pr diff "$pr_number"`
 4. Fetch review history via GraphQL (detect existing OpenCode reviews)
 5. Determine review mode (first/re-review/incremental)
 
-**Output**: PR metadata, files changed, diff, review threads, suggested review mode
+**Output**: PR metadata (including commit SHA), files changed, diff, review threads, suggested review mode
 
 ---
 
@@ -860,6 +860,9 @@ echo ""
 #### Step 4: Post Review
 
 ```bash
+# Get the latest commit SHA for the PR
+commit_sha=$(gh pr view "$pr_number" --json headRefOid -q .headRefOid)
+
 # Build review summary (high-level only, no detailed findings)
 review_summary="## 🤖 OpenCode Multi-Agent Review
 
@@ -884,18 +887,33 @@ $(echo "$formatted_findings" | jq -r '
 review_payload=$(jq -n \
   --arg body "$review_summary" \
   --arg event "COMMENT" \
+  --arg commit_id "$commit_sha" \
   --argjson comments "$(echo "$formatted_findings" | jq -c '[
     .[] |
-    {
-      path: .file,
-      line: .line_start,
-      side: "RIGHT",
-      body: .body
-    }
+    if .line_start == .line_end then
+      # Single-line comment
+      {
+        path: .file,
+        line: .line_end,
+        side: "RIGHT",
+        body: .body
+      }
+    else
+      # Multi-line comment
+      {
+        path: .file,
+        start_line: .line_start,
+        line: .line_end,
+        start_side: "RIGHT",
+        side: "RIGHT",
+        body: .body
+      }
+    end
   ]')" \
   '{
     body: $body,
     event: $event,
+    commit_id: $commit_id,
     comments: $comments
   }')
 
