@@ -4,6 +4,14 @@
   "theme": "gruvbox",
   "model": "github-copilot/claude-sonnet-4.5",
   "autoupdate": true,
+  "agent": {
+    "build": {
+      "disable": true
+    },
+    "plan": {
+      "disable": true
+    },
+  },
   "mcp": {
     "context7": {
       "type": "remote",

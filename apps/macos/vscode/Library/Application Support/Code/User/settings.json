@@ -6,4 +6,6 @@
   "editor.indentSize": 2,
   "editor.tabSize": 2,
   "editor.formatOnSave": true,
+  "gitlens.ai.model": "vscode",
+  "gitlens.ai.vscode.model": "copilot:gpt-4.1",
 }
