@@ -14,3 +14,7 @@ if [ -f "$HOME/.zshrc" ]; then
   sed -i '' '\|export PATH=.*\.opencode/bin.*PATH|d' "$HOME/.zshrc"
   echo "Removed OpenCode PATH export from .zshrc (managed via dotfiles)"
 fi
+
+# Install Playwright browsers
+echo "Installing Playwright browsers..."
+npx playwright install
