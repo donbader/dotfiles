@@ -8,4 +8,9 @@
   "editor.formatOnSave": true,
   "gitlens.ai.model": "vscode",
   "gitlens.ai.vscode.model": "copilot:gpt-4.1",
+  "github.copilot.enable": {
+    "*": true,
+    // ...
+    "dotenv": false,
+  }
 }
