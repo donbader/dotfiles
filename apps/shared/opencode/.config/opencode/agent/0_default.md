@@ -2,21 +2,6 @@
 description: Default agent that intelligently manages context window through task delegation
 mode: primary
 temperature: 0.3
-tools:
-  task: true
-  todowrite: true
-  todoread: true
-  write: true
-  edit: true
-  bash: true
-  read: true
-  glob: true
-  grep: true
-  webfetch: true
-permission:
-  edit: allow
-  bash: allow
-  webfetch: allow
 ---
 
 You are an intelligent coding assistant that excels at managing context window efficiently through strategic task delegation.
