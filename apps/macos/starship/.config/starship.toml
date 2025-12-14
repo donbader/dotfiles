@@ -152,13 +152,16 @@ am_or_rebase = "AM/REBASE"
 disabled = true
 
 # Custom Git Metrics - Shows +/- only for uncommitted changes in working directory
-# Uses ANSI color codes for colored output on normal background
+# Uses git status --short which is much faster than git diff --numstat
+# Counts modified/added files and deleted files separately for display
 [custom.git_metrics_workdir]
-command = """git diff --numstat 2>/dev/null | awk '{added+=$1; deleted+=$2} END {if (added > 0 || deleted > 0) {if (added > 0) printf "\\033[38;2;152;151;26m+%d\\033[0m", added; if (added > 0 && deleted > 0) printf " "; if (deleted > 0) printf "\\033[38;2;204;36;29m-%d\\033[0m", deleted; printf " "}}'"""
+command = """git status --porcelain 2>/dev/null | awk 'BEGIN {added=0; deleted=0} {if ($1 ~ /M|A|\\?/) added++; if ($1 ~ /D/) deleted++} END {if (added > 0 || deleted > 0) {if (added > 0) printf "\\033[38;2;152;151;26m+%d\\033[0m", added; if (added > 0 && deleted > 0) printf " "; if (deleted > 0) printf "\\033[38;2;204;36;29m-%d\\033[0m", deleted; printf " "}}'"""
 when = "git rev-parse --is-inside-work-tree 2>/dev/null"
 format = "[$output]($style)"
 style = "fg:color_fg0"
-description = "Show git diff stats for working directory with colors"
+description = "Show git status with file counts (faster alternative to diff)"
+shell = ["bash", "--noprofile", "--norc"]
+use_stdin = false
 
 # Custom Flox Environment - Shows active flox environment name on second line with white background and white text
 [custom.flox]
