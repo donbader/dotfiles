@@ -146,12 +146,11 @@ if [ "$use_worktree" = true ]; then
   pr_branch=$(echo "$pr_info" | jq -r .headRefName)
   base_branch=$(echo "$pr_info" | jq -r .baseRefName)
   
-  # Get git repository root and create worktree directory
-  repo_root=$(git rev-parse --show-toplevel)
-  worktree_dir="${repo_root}/.worktree/pr-address-${pr_number}"
+  # Create worktree directory in current working directory
+  worktree_dir=".worktree/pr-address-${pr_number}"
   
   # Create .worktree directory if it doesn't exist
-  mkdir -p "${repo_root}/.worktree"
+  mkdir -p ".worktree"
   
   # CRITICAL: Fetch latest from remote to avoid stale state
   echo "=== Fetching latest changes from origin/$pr_branch ==="
