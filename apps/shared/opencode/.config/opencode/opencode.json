@@ -13,6 +13,11 @@
     },
   },
   "mcp": {
+    "domain-search": {
+      "type": "remote",
+      "url": "https://instantdomainsearch.com/mcp/streamable-http",
+      "enabled": false,
+    },
     "context7": {
       "type": "remote",
       "url": "https://mcp.context7.com/mcp",
