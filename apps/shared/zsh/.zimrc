@@ -14,7 +14,8 @@ zmodule git
 # Applies correct bindkeys for input events.
 zmodule input
 # Sets a custom terminal title.
-zmodule termtitle
+# DISABLED: Not essential for startup performance
+# zmodule termtitle
 # Utility aliases and functions. Adds colour to ls, grep and less.
 zmodule utility
 
@@ -26,7 +27,8 @@ zmodule utility
 #
 
 # Exposes how long the last command took to run to prompts.
-zmodule duration-info
+# DISABLED: Starship handles this
+# zmodule duration-info
 # Exposes git repository status information to prompts.
 # DISABLED: Using Starship instead
 # zmodule git-info
