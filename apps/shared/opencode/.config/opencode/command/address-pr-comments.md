@@ -1,5 +1,5 @@
 ---
-name: git:address-comments
+name: git-address-comments
 description: Address and resolve code review comments on GitHub PRs
 ---
 
@@ -111,6 +111,7 @@ Before posting ANY reply to a review comment:
 ## Core Philosophy
 
 Your approach to addressing review comments should be:
+
 - **Context-First**: ALWAYS read the full thread conversation before taking action
 - **Systematic**: Process comments in logical order (file-by-file or by priority)
 - **Interactive**: Always get user confirmation before implementing changes
@@ -145,29 +146,29 @@ if [ "$use_worktree" = true ]; then
   pr_info=$(gh pr view $pr_number --json headRefName,baseRefName)
   pr_branch=$(echo "$pr_info" | jq -r .headRefName)
   base_branch=$(echo "$pr_info" | jq -r .baseRefName)
-  
+
   # Create worktree directory in current working directory
   worktree_dir=".worktree/pr-address-${pr_number}"
-  
+
   # Create .worktree directory if it doesn't exist
   mkdir -p ".worktree"
-  
+
   # CRITICAL: Fetch latest from remote to avoid stale state
   echo "=== Fetching latest changes from origin/$pr_branch ==="
   git fetch origin "$pr_branch"
-  
+
   # Create worktree from remote branch reference (not local)
   git worktree add "$worktree_dir" "origin/$pr_branch"
-  
+
   # Change to worktree directory
   cd "$worktree_dir"
-  
+
   # Verify we're on the latest commit
   latest_commit=$(git log -1 --oneline)
   echo "=== Created worktree at $worktree_dir ==="
   echo "=== Current commit: $latest_commit ==="
   echo "=== Base branch: $base_branch ==="
-  
+
   # Sanity check: verify no newer commits on remote
   git fetch origin "$pr_branch" 2>/dev/null
   newer_commits=$(git log HEAD..origin/$pr_branch --oneline)
@@ -197,11 +198,13 @@ echo "=== COMMIT_HISTORY ===" && git log --oneline origin/main..HEAD
 ```
 
 **Data captured**:
+
 - PR metadata (title, branch, URL)
 - **FULL review comment threads** - grouped by thread with ALL replies in chronological order
 - Recent commit history (for detecting already-addressed issues)
 
 **Why fetching full threads is critical**:
+
 - Original comments may have been clarified or refined through discussion
 - You may have already replied to a comment in a previous session
 - Other team members may have addressed the concern
@@ -213,6 +216,7 @@ echo "=== COMMIT_HISTORY ===" && git log --oneline origin/main..HEAD
 **CRITICAL PRE-PROCESSING**: Before categorizing, analyze the FULL conversation in each thread.
 
 **For each thread**:
+
 1. Read ALL replies in chronological order
 2. Understand the full discussion context:
    - What was the original concern?
@@ -225,10 +229,12 @@ echo "=== COMMIT_HISTORY ===" && git log --oneline origin/main..HEAD
 **Smart filtering and organization**:
 
 1. **Filter out resolved comments**:
+
    - GitHub API returns thread resolution status in the review threads
    - Skip any comments that are already marked as resolved
    - Focus only on unresolved threads that need attention
    - Check for resolved threads using GraphQL if needed:
+
    ```bash
    # Get resolved status for all review threads
    gh api graphql -f query='
@@ -254,12 +260,14 @@ echo "=== COMMIT_HISTORY ===" && git log --oneline origin/main..HEAD
    ```
 
 2. **Check for existing replies in thread** (CRITICAL):
+
    - Scan replies to see if you've already responded
    - Look for your username in reply authors
    - Flag as "Already Replied - Awaiting Reviewer Response" if found
    - **NEVER post duplicate responses to threads you've already replied to**
 
 3. **Auto-detect already addressed issues** (for unresolved comments without your replies):
+
    - Check if files mentioned in comments were modified in recent commits
    - Look for relevant keywords in commit messages
    - Read current file state and compare with comment context
@@ -267,6 +275,7 @@ echo "=== COMMIT_HISTORY ===" && git log --oneline origin/main..HEAD
    - Flag as "Possibly Already Addressed" if detected
 
 4. **Categorize by priority** (only unresolved comments):
+
    - 🚨 **Critical**: Security, bugs, breaking changes (MUST address)
    - ⚠️ **Important**: Performance, architecture violations (SHOULD address)
    - 💡 **Suggestions**: Readability, best practices (NICE to address)
@@ -322,7 +331,7 @@ Found 7 unresolved comment threads (4 already resolved, 1 already replied, skipp
 
 ### Already Replied (awaiting reviewer)
 6. 💬 src/api.ts:88 - Consider caching
-   By: @reviewer | Created: 4 days ago  
+   By: @reviewer | Created: 4 days ago
    Original: "This could benefit from caching"
    Thread: 2 replies
      └─ @you (3d ago): "Good idea! Implemented in commit def456"
@@ -344,7 +353,7 @@ How would you like to proceed?
 
 For each comment, present the context and options:
 
-```
+````
 Comment 1/6: src/auth.ts:42 - SQL injection vulnerability
 ---
 
@@ -358,7 +367,8 @@ Comment 1/6: src/auth.ts:42 - SQL injection vulnerability
 ```suggestion
 const query = 'SELECT * FROM users WHERE id = ?';
 const result = await db.query(query, [userId]);
-```
+````
+
 "
 
 [3] @teammate (30 mins ago):
@@ -367,14 +377,16 @@ const result = await db.query(query, [userId]);
 ---
 
 🔍 Smart Check: Analyzing if this might already be addressed...
-   - File last modified: 2 days ago (commit def456g)
-   - Commit message: "fix: add parameterized queries to auth"
-   - Current code shows parameterized queries in use
-   ⚠️ This appears to already be fixed! Consider option [8].
+
+- File last modified: 2 days ago (commit def456g)
+- Commit message: "fix: add parameterized queries to auth"
+- Current code shows parameterized queries in use
+  ⚠️ This appears to already be fixed! Consider option [8].
 
 Current code:
+
 ```typescript
-const query = 'SELECT * FROM users WHERE id = ?';
+const query = "SELECT * FROM users WHERE id = ?";
 const result = await db.query(query, [userId]);
 ```
 
@@ -390,6 +402,7 @@ Actions:
 [9] Show full thread context again
 
 Your choice (1-9):
+
 ```
 
 **Key improvements**:
@@ -452,25 +465,30 @@ Your choice (1-9):
 1. Apply the code change using appropriate tools
 2. Show diff to user for verification
 3. For critical bugs (🚨), prompt for test case:
-   ```
-   Should we add a test case for this fix? (recommended for bug fixes)
-   - Helps prevent regressions
-   - Documents expected behavior
-   - Increases reviewer confidence
-   ```
+```
+
+Should we add a test case for this fix? (recommended for bug fixes)
+
+- Helps prevent regressions
+- Documents expected behavior
+- Increases reviewer confidence
+
+````
 4. Create focused commit:
-   ```bash
-   git add [files]
-   git commit -m "fix: address review - [brief description]
-   
-   Addresses comment by @reviewer on [file]:[line]
-   - [What was changed]
-   - [Why it was changed]
-   [+ with test case]"
-   ```
+```bash
+git add [files]
+git commit -m "fix: address review - [brief description]
+
+Addresses comment by @reviewer on [file]:[line]
+- [What was changed]
+- [Why it was changed]
+[+ with test case]"
+````
+
 5. Get commit SHA: `commit_sha=$(git rev-parse --short HEAD)`
 
 **Batching strategy**:
+
 - Group related changes in the same file into one commit
 - Keep unrelated changes separate
 - Include test cases in the same commit as the fix
@@ -526,6 +544,7 @@ Post a single comprehensive PR comment as a last resort - but this should NOT be
 **Reply Templates** (for direct thread replies):
 
 **For implemented fixes**:
+
 ```markdown
 ✅ **Addressed**
 
@@ -534,10 +553,12 @@ Implemented your suggestion - changed to use parameterized queries to prevent SQ
 Fixed in commit: abc123f
 
 ---
-*🤖 Generated by OpenCode*
+
+_🤖 Generated by OpenCode_
 ```
 
 **For already addressed**:
+
 ```markdown
 ✅ **Already Addressed**
 
@@ -546,10 +567,12 @@ This was fixed in commit abc123f: "fix: add parameterized queries to auth"
 The code now uses parameterized queries as suggested. Thanks for catching this!
 
 ---
-*🤖 Generated by OpenCode*
+
+_🤖 Generated by OpenCode_
 ```
 
 **For questions/explanations**:
+
 ```markdown
 💬 **Response**
 
@@ -558,10 +581,12 @@ Good question! We're using polling here because of firewall restrictions in the 
 Happy to explore webhooks again once those restrictions are lifted.
 
 ---
-*🤖 Generated by OpenCode*
+
+_🤖 Generated by OpenCode_
 ```
 
 **For out of scope**:
+
 ```markdown
 ❌ **Out of Scope**
 
@@ -570,32 +595,39 @@ This is a valid point, but it's outside the scope of this PR which focuses on fi
 I've created issue #456 to track this improvement for a future PR.
 
 ---
-*🤖 Generated by OpenCode*
+
+_🤖 Generated by OpenCode_
 ```
 
 **For disagreements**:
+
 ```markdown
 💭 **Different Approach**
 
 I understand your concern, but I think the current approach is preferable here because:
+
 - [Technical reason 1]
 - [Technical reason 2]
 
 The alternative you suggested would [explain tradeoff]. Happy to discuss further if you have additional concerns.
 
 ---
-*🤖 Generated by OpenCode*
+
+_🤖 Generated by OpenCode_
 ```
 
 **For praise**:
+
 ```markdown
 🙏
 
 ---
-*🤖 Generated by OpenCode*
+
+_🤖 Generated by OpenCode_
 ```
 
 **Important Notes**:
+
 - NEVER mark conversations as resolved via API. Let reviewers verify and resolve.
 - Always attempt direct thread replies first - this is the preferred approach.
 - Keep replies concise and focused on the specific comment.
@@ -635,7 +667,7 @@ if [ -n "$failed_checks" ]; then
   echo ""
   echo "=== Analyzing failures to determine if related to your changes ==="
   echo ""
-  
+
   # Present failed checks to user for analysis
   # User must determine if failures are related to their changes
   echo "Please review the failed checks:"
@@ -648,7 +680,7 @@ if [ -n "$failed_checks" ]; then
   echo "[3] Unsure - let me investigate the logs"
   echo ""
   read -p "Your choice (1-3): " choice
-  
+
   case $choice in
     1)
       echo ""
@@ -685,6 +717,7 @@ fi
 ```
 
 **Why this matters**:
+
 - Changes made to address review comments might introduce test failures
 - Test failures could indicate:
   - Breaking changes to existing functionality
@@ -693,6 +726,7 @@ fi
   - Integration issues with other components
 
 **However**: Not all CI failures are related to your changes:
+
 - **Pre-existing failures**: Tests that were already failing before your changes
 - **Flaky tests**: Tests that fail intermittently due to timing issues
 - **Infrastructure issues**: CI environment problems (network, dependencies, etc.)
@@ -701,24 +735,27 @@ fi
 **What to do if tests fail**:
 
 1. **Investigate the failure**:
+
    - Check test logs to understand what broke
    - Compare: Did you modify the failing test or related code?
    - Check PR file changes: Are failing tests in files you touched?
 
 2. **Determine if related to your changes**:
+
    - ✅ **Related**: Failure in code/tests you modified → Fix it
    - ❌ **Unrelated**: Failure in completely different module → Safe to proceed
    - ❓ **Unsure**: Check git blame, ask in PR, or re-run tests
 
 3. **If related, fix the issues**:
+
    ```bash
    # Fix the code/tests
    git add [files]
    git commit -m "fix: update tests after addressing review comments
-   
+
    - Fixed selector tests to handle new lock pattern
    - Updated provider state tests for budget reset logic"
-   
+
    git push origin HEAD
    ```
 
@@ -728,6 +765,7 @@ fi
    - Complete the workflow
 
 **Example: Related failure**:
+
 ```
 ❌ Failed: Test BAAS - nodeproxy
 Cause: You modified nodeproxy/selector.go and broke SelectProvider test
@@ -735,8 +773,9 @@ Action: Fix your code, commit, push
 ```
 
 **Example: Unrelated failure**:
+
 ```
-❌ Failed: Test BAAS - core  
+❌ Failed: Test BAAS - core
 Cause: Failure in core/wallet_test.go, but you only touched nodeproxy/
 Action: Confirm unrelated, document if needed, proceed
 ```
@@ -801,10 +840,13 @@ fi
 ### Smart Suggestion Detection
 
 Detect and extract GitHub suggestion blocks:
-```markdown
+
+````markdown
 ```suggestion
 const query = 'SELECT * FROM users WHERE id = ?';
 ```
+````
+
 ```
 
 Apply these directly at the specified line number.
@@ -813,11 +855,14 @@ Apply these directly at the specified line number.
 
 For non-controversial changes:
 ```
+
 Apply all simple suggestions? (y/n)
+
 - ✅ Variable renaming (3 comments)
 - ✅ Import organization (2 comments)
 - ⏭️ Skipping architectural changes (requires discussion)
-```
+
+````
 
 ### Conflict Detection
 
@@ -883,11 +928,12 @@ func TestNoPanicWithSingleProvider(t *testing.T) {
     assert.NoError(t, err)
     assert.NotNil(t, provider)
 }
-```
+````
 
 ## Success Criteria
 
 A successful session achieves:
+
 - ✅ **Read FULL thread conversations** before taking any action (CRITICAL)
 - ✅ No duplicate responses posted to threads you've already replied to
 - ✅ All critical comments addressed or explicitly deferred with solid reasoning
@@ -905,6 +951,7 @@ A successful session achieves:
 ## Pre-merge Checklist
 
 Before requesting re-review:
+
 - [ ] All 🚨 critical comments addressed or rejected with strong justification
 - [ ] All bug fixes have test cases
 - [ ] **All CI checks verified (passing or unrelated failures documented)**

@@ -1,5 +1,5 @@
 ---
-name: git:review-pr-orchestration
+name: git-review-pr-orchestration
 description: Multi-agent PR review with specialized reviewers (code-quality, security, performance)
 ---
 
@@ -16,6 +16,7 @@ This workflow uses a **multi-agent architecture** with specialist reviewers:
 - **performance-reviewer** (optional) - Performance issues and optimizations
 
 The orchestrator:
+
 1. Gathers shared context once
 2. Spawns specialist agents in parallel
 3. Aggregates findings using severity hierarchy
@@ -53,15 +54,18 @@ This command is designed to be **parallel-execution safe**, meaning you can run 
 ### How It Works
 
 Each review session is identified by PR number:
+
 - `pr-review-{pr_number}`
 
 Example session IDs:
+
 - `pr-review-123`
 - `pr-review-456`
 
 ### Isolated Resources
 
 Each PR review has its own:
+
 - **Worktree** (if using URL mode): `{current_dir}/.worktree/pr-review-{pr_number}/`
   - Created in your current working directory
   - Multiple PRs can have worktrees in the same `.worktree` folder
@@ -88,6 +92,7 @@ Each PR review has its own:
 ```
 
 Each review will:
+
 - ✅ Use isolated temp files (no conflicts)
 - ✅ Use separate worktrees (no git conflicts)
 - ✅ Clean up automatically on completion or failure
@@ -98,9 +103,11 @@ Each review will:
 ## Workflow Phases
 
 ### Phase 1: Setup & PR Detection
+
 **Sequential** - Must complete before proceeding
 
 **Tasks**:
+
 ```bash
 # 1. Extract PR number from URL argument OR detect from current branch
 if [ -n "$1" ] && [[ "$1" =~ ^https?:// ]]; then
@@ -125,32 +132,32 @@ if [ "$use_worktree" = true ]; then
     echo "ERROR: Not in a git repository. Cannot create worktree."
     exit 1
   fi
-  
+
   # Create worktree in current working directory
   current_dir="$(pwd)"
   worktree_path="${current_dir}/.worktree/pr-review-${pr_number}"
   pr_branch=$(gh pr view "$pr_number" --json headRefName -q .headRefName)
-  
+
   echo "📁 Review session: pr-review-${pr_number}"
   echo "📁 Current directory: $current_dir"
   echo "🌳 Creating worktree at: $worktree_path"
-  
+
   # Create .worktree directory if it doesn't exist
   mkdir -p "${current_dir}/.worktree"
-  
+
   git fetch origin "$pr_branch"
   git worktree add "$worktree_path" "origin/$pr_branch"
   cd "$worktree_path"
-  
+
   # Create temp directory INSIDE worktree for review artifacts
   temp_dir="${worktree_path}/.review"
   mkdir -p "$temp_dir"
-  
+
   # Ensure review artifacts aren't tracked by git
   echo "*" > "${temp_dir}/.gitignore"
-  
+
   echo "📂 Review artifacts: ${temp_dir}"
-  
+
   # Set up cleanup trap to remove worktree and all artifacts
   cleanup_on_exit() {
     if [ -n "$worktree_path" ] && [ -d "$worktree_path" ]; then
@@ -167,10 +174,10 @@ else
   # Use /tmp for review artifacts
   temp_dir="/tmp/opencode-review/pr-review-${pr_number}"
   mkdir -p "$temp_dir"
-  
+
   echo "📁 Review session: pr-review-${pr_number}"
   echo "📂 Review artifacts: ${temp_dir}"
-  
+
   # Set up cleanup trap for temp files
   cleanup_on_exit() {
     if [ -d "$temp_dir" ]; then
@@ -193,9 +200,11 @@ gh pr view "$pr_number" --json title,state || {
 ---
 
 ### Phase 2: Information Gathering
+
 **Execute all tasks in parallel**
 
 **Tasks**:
+
 1. Fetch PR metadata: `gh pr view "$pr_number" --json title,body,author,state,isDraft,labels,baseRefName,headRefName,headRefOid`
 2. Fetch files changed: `gh pr view "$pr_number" --json files`
 3. Fetch PR diff: `gh pr diff "$pr_number"`
@@ -207,9 +216,11 @@ gh pr view "$pr_number" --json title,state || {
 ---
 
 ### Phase 3: Shared Context Building
+
 **Sequential** - Build context object for all agents
 
 **Tasks**:
+
 1. Parse PR intent and constraints from description
 2. Analyze changed files to identify relevant codebase areas
 3. Gather contextual code from related modules/files
@@ -222,48 +233,48 @@ gh pr view "$pr_number" --json title,state || {
 **Context Gathering Strategy**:
 
 For each changed file, gather relevant context:
+
 - **If changing a specific module** (e.g., `crawler/config.ts`):
   - Include the full implementation of the changed module
   - Find related files (imports, exports, usage)
   - Show how the module is used in the codebase (call sites)
   - Include relevant tests if they exist
-  
 - **If changing configuration**:
   - Show how configuration is loaded and used
   - Include examples of existing configurations
   - Show the runtime flow that uses the config
-  
 - **If changing database/repository layer**:
   - Include related schema/migration files
   - Show service layer that uses the repository
   - Include similar repository patterns for consistency
-  
 - **If changing API endpoints**:
   - Include related middleware and validators
   - Show the full request/response flow
   - Include authentication/authorization patterns
 
 **Example Context Gathering**:
+
 ```bash
 # For each changed file, gather contextual information
 for file in "${files_changed[@]}"; do
   # 1. Identify the module/component being changed
   module_path=$(dirname "$file")
   module_name=$(basename "$module_path")
-  
+
   # 2. Find related files (same directory, imports, usages)
   related_files=$(rg -l "import.*$(basename "$file" .ts)" --type ts || true)
   import_files=$(rg "^import.*from" "$file" | awk -F"'" '{print $2}' || true)
-  
+
   # 3. Gather full implementation of key related files
   # (limit to avoid context overflow - top 5 most relevant)
-  
+
   # 4. Find usage examples
   usage_examples=$(rg -A 3 "$(basename "$file" .ts)\." --type ts | head -20 || true)
 done
 ```
 
 **Context Object Structure** (see `shared/context-schema.md`):
+
 ```json
 {
   "pr_metadata": { ... },
@@ -285,7 +296,7 @@ done
           "relationship": "Imports and uses CrawlerConfig"
         },
         {
-          "path": "crawler/worker.ts", 
+          "path": "crawler/worker.ts",
           "content": "...",
           "relationship": "Uses crawler configuration"
         }
@@ -320,6 +331,7 @@ done
 **Output**: Shared context JSON object stored in `$temp_dir/shared_context.json`
 
 **Context Size Management**:
+
 - Limit each changed file's context to ~500 lines of related code
 - Prioritize: direct dependencies > usage examples > tests > similar patterns
 - If PR changes >10 files, focus on top 10 most significant changes
@@ -329,6 +341,7 @@ done
 ---
 
 ### Phase 4: Multi-Agent Analysis
+
 **Dynamic - Orchestrator decides which agents to spawn**
 
 #### Agent Selection Logic
@@ -344,7 +357,7 @@ if [[ "$pr_content" =~ (auth|password|token|secret|oauth|crypto|security) ]] || 
   echo "✓ Auto-enabled security-reviewer (detected security-related changes)"
 fi
 
-# Auto-enable performance agent if PR touches performance-sensitive areas  
+# Auto-enable performance agent if PR touches performance-sensitive areas
 if [[ "$pr_content" =~ (query|database|loop|performance|cache|optimize) ]] || \
    [[ "$files_changed" =~ (repository|service|query) ]] || \
    [ "$files_changed_count" -gt 20 ]; then
@@ -441,6 +454,7 @@ echo "✅ All agents completed"
 ---
 
 ### Phase 5: AI-Powered Aggregation, Filtering & Formatting
+
 **AI Agent Decision-Making** - Intelligent curation of final review comments
 
 #### Step 1: Collect All Findings
@@ -539,12 +553,12 @@ Return **ONLY** the findings that should be posted (after all filtering, merging
       \"confidence\": 85,
       \"category\": \"security-sql-injection\",
       \"title\": \"Brief title\",
-      
+
       // If merged:
       \"is_merged\": true,
       \"agents\": [\"security-reviewer\", \"performance-reviewer\"],
       \"original_finding_count\": 2,
-      
+
       // Combined/preserved fields:
       \"issue\": \"...\",
       \"why_it_matters\": \"...\",
@@ -595,7 +609,7 @@ final_findings=$(echo "$aggregation_result" | jq -r '.final_findings')
 
 # Log aggregation summary
 echo "✅ AI Aggregation complete:"
-echo "$aggregation_result" | jq -r '.metadata | 
+echo "$aggregation_result" | jq -r '.metadata |
   "  - Total raw findings: \(.total_raw_findings)",
   "  - Kept: \(.kept)",
   "  - Merged: \(.merged)",
@@ -631,14 +645,14 @@ echo "💡 Review discarded findings: ${temp_dir}/discarded_findings.json"
 
 **Why This Is Better**:
 
-| Old Approach | New Approach (AI-Powered) |
-|--------------|---------------------------|
-| Hardcoded rules (confidence >60) | Context-aware decisions |
-| Simple keyword matching | Semantic understanding |
+| Old Approach                      | New Approach (AI-Powered)            |
+| --------------------------------- | ------------------------------------ |
+| Hardcoded rules (confidence >60)  | Context-aware decisions              |
+| Simple keyword matching           | Semantic understanding               |
 | Can't judge "intentional pattern" | Uses codebase_patterns intelligently |
-| Misses related findings | Merges complementary insights |
-| No explanation | Transparent reasoning |
-| Rigid filtering | Flexible, intelligent curation |
+| Misses related findings           | Merges complementary insights        |
+| No explanation                    | Transparent reasoning                |
+| Rigid filtering                   | Flexible, intelligent curation       |
 
 #### Step 3: Sort by Severity
 
@@ -665,23 +679,23 @@ echo "  - Questions: $(echo "$sorted_findings" | jq '[.[] | select(.severity == 
 
 The orchestrator now formats each finding into a complete, styled comment body (handles both merged and single findings):
 
-```bash
+````bash
 # Format each finding into a complete markdown comment
-formatted_findings=$(echo "$sorted_findings" | jq -r '.[] | 
+formatted_findings=$(echo "$sorted_findings" | jq -r '.[] |
   # Determine severity emoji
   (if .severity == "critical" then "🚨"
    elif .severity == "important" then "⚠️"
    elif .severity == "suggestion" then "💡"
    else "❓"
    end) as $emoji |
-  
+
   # Determine agent attribution (handle merged findings)
   (if .is_merged then
     (.agents | join(", "))
    else
     (.agent // "unknown")
    end) as $agent_list |
-  
+
   # Build comment body
   {
     file: .file,
@@ -694,46 +708,46 @@ formatted_findings=$(echo "$sorted_findings" | jq -r '.[] |
     is_merged: (.is_merged // false),
     body: (
       $emoji + " **" + (.severity | ascii_upcase) + " - " + .title + "**\n\n" +
-      
+
       # Add merged indicator if applicable
       (if .is_merged then
         "🔗 *Multiple agents identified related issues on this line*\n\n"
       else "" end) +
-      
+
       "**Issue**: " + .issue + "\n\n" +
       "**Why this matters**: " + .why_it_matters + "\n\n" +
-      
+
       # Add attack example if present (for security findings)
       (if .attack_example then
         "**Attack example**:\n```" + (.attack_example_language // "text") + "\n" + .attack_example + "\n```\n\n"
       else "" end) +
-      
+
       # Add performance impact if present
       (if .performance_impact then
         "**Performance impact**:\n```\n" + .performance_impact + "\n```\n\n"
       else "" end) +
-      
+
       # Add fix section
       "**Fix**: " + .fix + "\n\n" +
-      
+
       # Add fix code if present
       (if .fix_code then
         "```" + (.fix_code_language // "text") + "\n" + .fix_code + "\n```\n\n"
       else "" end) +
-      
+
       # Add learning if present
       (if .learning then
         "**Learning**: " + .learning + "\n\n"
       else "" end) +
-      
+
       # Add references if present
       (if .references and (.references | length > 0) then
         "**References**:\n" + (.references | map("- " + .) | join("\n")) + "\n\n"
       else "" end) +
-      
+
       # Footer with agent attribution
       "---\n*🤖 Generated by OpenCode (" + $agent_list + ")*" +
-      
+
       # Add resolution method indicator for debugging
       (if .is_merged then
         "\n*✨ Context-aware merge: Related findings combined*"
@@ -746,11 +760,12 @@ formatted_findings=$(echo "$sorted_findings" | jq -r '.[] |
 
 # Save formatted findings
 echo "$formatted_findings" > "${temp_dir}/formatted_findings.json"
-```
+````
 
 **Comment Body Format Generated**:
 
 The orchestrator generates fully-formatted markdown comments with:
+
 - ✅ Severity emoji (🚨 ⚠️ 💡 ❓)
 - ✅ Title with severity level
 - ✅ Merge indicator (when multiple agents agree on related issues)
@@ -766,10 +781,11 @@ The orchestrator generates fully-formatted markdown comments with:
 - ✅ Resolution method indicator (merge vs filter)
 
 **Example 1: Merged Comment (Related Findings)**:
-```markdown
+
+````markdown
 🚨 **CRITICAL - Multiple related issues: SQL injection vulnerability + Missing database index**
 
-🔗 *Multiple agents identified related issues on this line*
+🔗 _Multiple agents identified related issues on this line_
 
 **Issue**: Multiple agents identified related issues:
 
@@ -782,13 +798,16 @@ The orchestrator generates fully-formatted markdown comments with:
 Query performance degrades significantly with table growth. Current O(n) lookup will cause timeouts at scale.
 
 **Attack example**:
+
 ```typescript
 // If userId = "1 OR 1=1 --"
 // Query becomes: SELECT * FROM users WHERE id = 1 OR 1=1 --
 // Returns ALL users
 ```
+````
 
 **Performance impact**:
+
 ```
 Current: Full table scan (1M rows = 5000ms)
 With fix: Index lookup (1M rows = 2ms)
@@ -797,11 +816,12 @@ With fix: Index lookup (1M rows = 2ms)
 **Fix**: Use parameterized queries to prevent SQL injection
 
 Additional considerations:
+
 - Add database index on user_id column for O(1) lookups
 - Consider query result caching for frequently accessed users
 
 ```typescript
-const query = 'SELECT * FROM users WHERE id = ?';
+const query = "SELECT * FROM users WHERE id = ?";
 const result = await db.query(query, [userId]);
 ```
 
@@ -810,14 +830,17 @@ const result = await db.query(query, [userId]);
 Indexing foreign keys and frequently queried columns is essential for performance at scale.
 
 **References**:
+
 - OWASP SQL Injection: https://owasp.org/www-community/attacks/SQL_Injection
 - Database Indexing Best Practices: https://use-the-index-luke.com/
 - See UserRepository.ts:42 for example of parameterized queries
 
 ---
-*🤖 Generated by OpenCode (security-reviewer, performance-reviewer)*
-*✨ Context-aware merge: Related findings combined*
-```
+
+_🤖 Generated by OpenCode (security-reviewer, performance-reviewer)_
+_✨ Context-aware merge: Related findings combined_
+
+````
 
 **Example 2: Independent Finding (Highest Severity Kept)**:
 ```markdown
@@ -835,17 +858,20 @@ const dbPassword = "super_secret_password_123";
 
 // After
 const dbPassword = process.env.DB_PASSWORD;
-```
+````
 
 **Learning**: Never commit credentials to source control. Use environment variables or secret management systems.
 
 **References**:
+
 - OWASP: Use of Hard-coded Credentials
 - 12-Factor App: Store config in environment
 
 ---
-*🤖 Generated by OpenCode (security-reviewer)*
-*🎯 Context-aware filter: Kept highest severity of independent findings*
+
+_🤖 Generated by OpenCode (security-reviewer)_
+_🎯 Context-aware filter: Kept highest severity of independent findings_
+
 ```
 
 *(In this case, code-quality-reviewer also flagged the same line for poor variable naming, but since it's unrelated to the security issue and has lower severity, it was filtered out)*
@@ -860,6 +886,7 @@ const dbPassword = process.env.DB_PASSWORD;
 ---
 
 ### Phase 6: Post Review
+
 **Sequential** - Format summary, preview, and post final review
 
 #### Step 1: Prepare for Preview
@@ -906,7 +933,7 @@ echo "📝 DETAILED COMMENT PREVIEW"
 echo "======================================"
 echo ""
 
-echo "$formatted_findings" | jq -r '.[] | 
+echo "$formatted_findings" | jq -r '.[] |
   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
   "📍 Location: " + .file + ":" + (.line_start | tostring) + "\n" +
   "🏷️  Severity: " + .severity + "\n" +
@@ -1020,6 +1047,7 @@ echo ""
 ---
 
 ### Phase 7: Cleanup
+
 **Sequential** - Final teardown
 
 ```bash
@@ -1041,15 +1069,16 @@ echo "🧹 Cleanup will be performed automatically on exit"
 
 ## Performance Comparison
 
-| Metric | v3 (Single Agent) | v4 (Multi-Agent) | Improvement |
-|--------|-------------------|------------------|-------------|
-| **Code Quality Analysis** | 15s | 5s | 66% faster |
-| **Security Analysis** | N/A | 4s | New capability |
-| **Performance Analysis** | N/A | 3s | New capability |
-| **Total Review Time** | 26s | 12s (parallel) | 54% faster |
-| **Specialist Depth** | General | Deep | Higher quality |
+| Metric                    | v3 (Single Agent) | v4 (Multi-Agent) | Improvement    |
+| ------------------------- | ----------------- | ---------------- | -------------- |
+| **Code Quality Analysis** | 15s               | 5s               | 66% faster     |
+| **Security Analysis**     | N/A               | 4s               | New capability |
+| **Performance Analysis**  | N/A               | 3s               | New capability |
+| **Total Review Time**     | 26s               | 12s (parallel)   | 54% faster     |
+| **Specialist Depth**      | General           | Deep             | Higher quality |
 
 **Key Benefits**:
+
 - **Parallel execution**: All agents run simultaneously
 - **Specialized expertise**: Each agent is a deep specialist
 - **Dynamic selection**: Only runs relevant agents
@@ -1060,6 +1089,7 @@ echo "🧹 Cleanup will be performed automatically on exit"
 ## Agent Selection Examples
 
 ### Example 1: OAuth Implementation PR
+
 ```
 PR Title: "Add OAuth2 support for Google login"
 PR contains: "authentication", "oauth", "token"
@@ -1067,24 +1097,26 @@ PR contains: "authentication", "oauth", "token"
 Auto-enabled agents:
   ✓ code-quality-reviewer (always)
   ✓ security-reviewer (detected: oauth, token, authentication)
-  
+
 Result: 2 agents (no performance-reviewer needed)
 ```
 
 ### Example 2: Database Optimization PR
+
 ```
-PR Title: "Optimize user queries with indexes"  
+PR Title: "Optimize user queries with indexes"
 Files changed: UserRepository.ts, migrations/add-indexes.sql
 PR contains: "query", "optimize", "database"
 
 Auto-enabled agents:
   ✓ code-quality-reviewer (always)
   ✓ performance-reviewer (detected: query, optimize, database)
-  
+
 Result: 2 agents (no security-reviewer needed)
 ```
 
 ### Example 3: Large Refactoring PR
+
 ```
 PR Title: "Refactor auth module"
 Files changed: 25 files
@@ -1094,7 +1126,7 @@ Auto-enabled agents:
   ✓ code-quality-reviewer (always)
   ✓ security-reviewer (detected: auth, password, session)
   ✓ performance-reviewer (detected: large PR with 25 files)
-  
+
 Result: 3 agents (comprehensive review)
 ```
 
@@ -1158,6 +1190,7 @@ Result: KEEP HIGHEST SEVERITY
 ### Relatedness Detection Algorithm
 
 **Keywords Checked** (indicate same root cause):
+
 ```bash
 # Security-related
 "parameterized", "prepare", "validation", "sanitize", "escape", "hash", "encrypt"
@@ -1170,6 +1203,7 @@ Result: KEEP HIGHEST SEVERITY
 ```
 
 **Category Families**:
+
 ```bash
 # Examples of related categories (share prefix)
 sql-injection, sql-performance → Related (both "sql-*")
@@ -1182,22 +1216,24 @@ auth-credentials, performance-loop → Unrelated
 ```
 
 **Similarity Threshold**:
+
 - **MERGE** if: 1+ shared fix keywords OR same category family OR 4+ shared issue words
 - **FILTER** if: None of the above (keep highest severity)
 
 ### Benefits Over Simple Hierarchy
 
-| Feature | Simple Hierarchy (Old) | Context-Aware (New) |
-|---------|----------------------|---------------------|
-| **Information Loss** | High (discards lower severity) | Low (merges related findings) |
-| **Developer Experience** | May miss related insights | Gets complete picture |
-| **Comment Quality** | One perspective | Multiple expert perspectives |
-| **False Positives** | Same | Reduced (better filtering) |
-| **Execution Time** | Fast | Slightly slower (worth it) |
+| Feature                  | Simple Hierarchy (Old)         | Context-Aware (New)           |
+| ------------------------ | ------------------------------ | ----------------------------- |
+| **Information Loss**     | High (discards lower severity) | Low (merges related findings) |
+| **Developer Experience** | May miss related insights      | Gets complete picture         |
+| **Comment Quality**      | One perspective                | Multiple expert perspectives  |
+| **False Positives**      | Same                           | Reduced (better filtering)    |
+| **Execution Time**       | Fast                           | Slightly slower (worth it)    |
 
 **Example Impact**:
 
 Old approach (SQL injection + missing index):
+
 ```
 ❌ Security finding kept
 ❌ Performance finding discarded
@@ -1205,6 +1241,7 @@ Old approach (SQL injection + missing index):
 ```
 
 New approach:
+
 ```
 ✅ Both findings merged into one rich comment
 ✅ Developer fixes both issues in one pass
@@ -1218,17 +1255,17 @@ When findings cannot be merged, priority order:
 ```javascript
 // 1. Severity (highest priority)
 const SEVERITY_RANK = {
-  'critical': 4,
-  'important': 3,
-  'suggestion': 2,
-  'question': 1
+  critical: 4,
+  important: 3,
+  suggestion: 2,
+  question: 1,
 };
 
 // 2. Category (within same severity)
 const CATEGORY_PRIORITY = {
-  'security': 3,
-  'performance': 2,
-  'code-quality': 1
+  security: 3,
+  performance: 2,
+  "code-quality": 1,
 };
 
 // 3. Confidence (tie-breaker)
@@ -1242,6 +1279,7 @@ const CATEGORY_PRIORITY = {
 ### Automatic Cleanup on Failure
 
 All review artifacts and worktrees are automatically cleaned up via EXIT trap:
+
 ```bash
 # Set in Phase 1 - runs on any exit (success or failure)
 
@@ -1264,6 +1302,7 @@ trap cleanup_on_exit EXIT
 ```
 
 **Benefits**:
+
 - ✅ No orphaned review artifacts even if review crashes
 - ✅ No orphaned worktrees even if review is interrupted
 - ✅ Safe parallel execution (each PR has isolated resources)
@@ -1272,6 +1311,7 @@ trap cleanup_on_exit EXIT
 ### Agent Failures
 
 If an agent fails:
+
 ```bash
 # Continue with other agents (partial results better than none)
 if ! wait "$agent_pid"; then
@@ -1283,6 +1323,7 @@ fi
 ### Aggregation Failures
 
 If aggregation fails:
+
 ```bash
 # Fall back to posting all findings without deduplication
 if [ $? -ne 0 ]; then
@@ -1318,16 +1359,16 @@ fi
 
 ## Comparison: v3 vs v4
 
-| Feature | v3 (Single Agent) | v4 (Multi-Agent) |
-|---------|-------------------|------------------|
-| **Architecture** | Monolithic generalist | Specialized agents |
-| **Execution** | Sequential phases | Parallel agents |
-| **Security Review** | Basic patterns | Deep security expertise |
-| **Performance Review** | Basic patterns | Deep performance expertise |
-| **Code Quality** | Comprehensive | Comprehensive |
-| **Speed** | 26s | 12s (parallel) |
-| **Extensibility** | Add to one large file | Add new specialist agent |
-| **Maintenance** | One 1600-line file | Multiple focused files |
+| Feature                | v3 (Single Agent)     | v4 (Multi-Agent)           |
+| ---------------------- | --------------------- | -------------------------- |
+| **Architecture**       | Monolithic generalist | Specialized agents         |
+| **Execution**          | Sequential phases     | Parallel agents            |
+| **Security Review**    | Basic patterns        | Deep security expertise    |
+| **Performance Review** | Basic patterns        | Deep performance expertise |
+| **Code Quality**       | Comprehensive         | Comprehensive              |
+| **Speed**              | 26s                   | 12s (parallel)             |
+| **Extensibility**      | Add to one large file | Add new specialist agent   |
+| **Maintenance**        | One 1600-line file    | Multiple focused files     |
 
 **When to use v3**: Simple PRs, want single comprehensive reviewer  
 **When to use v4**: Complex PRs, want specialist expertise, need speed
@@ -1337,18 +1378,22 @@ fi
 ## Files Reference
 
 **Specialist Agent files**:
+
 - `agent/pr-reviewers/code-quality-reviewer.md` - Architecture, modularity, readability, testing
 - `agent/pr-reviewers/security-reviewer.md` - Security vulnerabilities, OWASP Top 10
 - `agent/pr-reviewers/performance-reviewer.md` - Performance issues, algorithmic complexity
 
 **Aggregator Agent**:
+
 - `agent/pr-reviewers/review-aggregator.md` - AI agent that filters, merges, and curates final findings
 
 **Shared knowledge**:
+
 - `shared/reviewer-base.md` - Common principles, output format, tone
 - `shared/context-schema.md` - Shared context structure
 
 **Orchestrator**:
+
 - `command/review-pr-orchestration.md` - This file (workflow orchestration)
 
 ---

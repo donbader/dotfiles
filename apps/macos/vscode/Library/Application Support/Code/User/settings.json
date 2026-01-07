@@ -9,8 +9,16 @@
   "gitlens.ai.model": "vscode",
   "gitlens.ai.vscode.model": "copilot:gpt-4.1",
   "github.copilot.enable": {
-    "*": true,
-    // ...
+    "plaintext": false,
+    "markdown": false,
+    "scminput": false,
     "dotenv": false,
+    "*": false,
+    "go": true,
+    "javascript": true,
+    "shell": true
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   }
 }
