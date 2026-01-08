@@ -7,7 +7,7 @@
 [alias]
 
   ### TODO: frequently use
-  ds = !"tig status"
+  ds = !"gitui"
 
   # History
   l = log --graph --abbrev-commit --date=relative --all --format='%C(red)%h -%C(yellow)%d %C(auto)%s %C(blue)%an %C(green)(%ad)'
