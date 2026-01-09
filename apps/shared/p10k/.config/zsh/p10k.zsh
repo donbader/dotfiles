@@ -44,6 +44,7 @@ fi
     os_icon                 # os identifier
     dir                     # current directory
     vcs                     # git status
+    flox                    # flox environment
     # =========================[ Line #2 ]=========================
     newline                 # \n
     # prompt_char           # prompt symbol
@@ -1689,6 +1690,31 @@ fi
   # typeset -g POWERLEVEL9K_TIME_VISUAL_IDENTIFIER_EXPANSION='⭐'
   # Custom prefix.
   # typeset -g POWERLEVEL9K_TIME_PREFIX='%244Fat '
+
+  #####################################[ flox: flox environment ]####################################
+  # Flox environment indicator - displays when inside a flox environment
+  function prompt_flox() {
+    # Check if we're in a flox environment by looking for FLOX_ENV variable
+    [[ -n "${FLOX_ENV}" ]] || return
+    
+    # Extract environment name from FLOX_ENV path
+    # FLOX_ENV typically looks like: /path/to/project/.flox/run/<hash>/etc
+    local flox_env_name="${FLOX_ENV:h:h:h:h:t}"
+    
+    # Display the environment name
+    p10k segment -s FLOX -f 74 -i '❄' -t "${flox_env_name}"
+  }
+  
+  # Instant prompt version of flox segment
+  function instant_prompt_flox() {
+    prompt_flox
+  }
+  
+  # Flox segment colors
+  typeset -g POWERLEVEL9K_FLOX_FOREGROUND=74
+  typeset -g POWERLEVEL9K_FLOX_BACKGROUND=235
+  # Custom icon (nix snowflake since flox is built on nix)
+  # typeset -g POWERLEVEL9K_FLOX_VISUAL_IDENTIFIER_EXPANSION='❄'
 
   # Example of a user-defined prompt segment. Function prompt_example will be called on every
   # prompt if `example` prompt segment is added to POWERLEVEL9K_LEFT_PROMPT_ELEMENTS or

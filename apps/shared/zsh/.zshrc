@@ -1,18 +1,14 @@
-# Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
-# Initialization code that may require console input (password prompts, [y/n]
-# confirmations, etc.) must go above this block; everything else may go below.
-if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
-  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
-fi
-
-# Start configuration added by Zim Framework install {{{
-#
-# User configuration sourced by interactive shells
-#
-
 # -----------------
 # Zsh configuration
 # -----------------
+
+# Prevent duplicate compinit calls (e.g., from flox activation)
+# If compinit was already called (by flox or another tool), skip zim's compinit
+if [[ -n "${FLOX_ENV}" ]] && typeset -f compinit > /dev/null; then
+  # compinit already exists (called by flox), so stub it out for zim
+  _orig_compinit=$(which compinit)
+  compinit() { : ; }  # No-op function
+fi
 
 #
 # History
@@ -106,10 +102,17 @@ if [[ ! -e ${ZIM_HOME}/zimfw.zsh ]]; then
 fi
 # Install missing modules, and update ${ZIM_HOME}/init.zsh if missing or outdated.
 if [[ ! ${ZIM_HOME}/init.zsh -nt ${ZIM_CONFIG_FILE:-${ZDOTDIR:-${HOME}}/.zimrc} ]]; then
-  source ${ZIM_HOME}/zimfw.zsh init
+  source ${ZIM_HOME}/zimfw.zsh init -q 2>/dev/null
 fi
 # Initialize modules.
 source ${ZIM_HOME}/init.zsh
+
+# Restore original compinit if we stubbed it out
+if [[ -n "${FLOX_ENV}" ]] && typeset -f compinit > /dev/null; then
+  unfunction compinit 2>/dev/null
+  [[ -n "${_orig_compinit}" ]] && autoload -Uz compinit
+  unset _orig_compinit
+fi
 
 # ------------------------------
 # Post-init module configuration
@@ -126,9 +129,19 @@ for key ('^[[B' '^N' ${terminfo[kcud1]}) bindkey ${key} history-substring-search
 for key ('k') bindkey -M vicmd ${key} history-substring-search-up
 for key ('j') bindkey -M vicmd ${key} history-substring-search-down
 unset key
-# }}} End configuration added by Zim Framework install
+
+# Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
+# Initialization code that may require console input (password prompts, [y/n]
+# confirmations, etc.) must go above this block; everything else may go below.
+# 
+# Skip instant prompt when in flox-activated shells to avoid compinit warnings
+# since flox will call compinit again when fpath changes
+if [[ -z "${FLOX_ENV}" && -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
 
 # Source all configs from ~/.config/zsh/
+# These are sourced after instant prompt to avoid console output warnings
 for config in ~/.config/zsh/*.zsh; do
     [ -f "$config" ] && source "$config"
 done
