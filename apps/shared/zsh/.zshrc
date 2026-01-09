@@ -1,150 +1,33 @@
-# -----------------
-# Zsh configuration
-# -----------------
-
-# Prevent duplicate compinit calls (e.g., from flox activation)
-# If compinit was already called (by flox or another tool), skip zim's compinit
-if [[ -n "${FLOX_ENV}" ]] && typeset -f compinit > /dev/null; then
-  # compinit already exists (called by flox), so stub it out for zim
-  _orig_compinit=$(which compinit)
-  compinit() { : ; }  # No-op function
-fi
-
+# ====================
+# Zsh Configuration
+# ====================
 #
-# History
+# Modular zsh configuration with three-stage initialization
+# Apps can add their configs to ~/.config/zsh/{pre-init,init,post-init}/
 #
+# Execution order:
+#   1. pre-init/   - Runs FIRST (e.g., stub functions before frameworks load)
+#   2. init/       - Main initialization (options, zim, most configs)
+#   3. post-init/  - Runs LAST (e.g., keybindings, instant prompts, overrides)
 
-# Remove older command from the history if a duplicate is to be added.
-setopt HIST_IGNORE_ALL_DUPS
-
-#
-# Input/output
-#
-
-# Set editor default keymap to emacs (`-e`) or vi (`-v`)
-bindkey -e
-
-# Prompt for spelling correction of commands.
-#setopt CORRECT
-
-# Customize spelling correction prompt.
-#SPROMPT='zsh: correct %F{red}%R%f to %F{green}%r%f [nyae]? '
-
-# Remove path separator from WORDCHARS.
-WORDCHARS=${WORDCHARS//[\/]}
-
-# --------------------
-# Module configuration
-# --------------------
-
-#
-# git
-#
-
-# Set a custom prefix for the generated aliases. The default prefix is 'G'.
-#zstyle ':zim:git' aliases-prefix 'g'
-
-#
-# input
-#
-
-# Append `../` to your input for each `.` you type after an initial `..`
-#zstyle ':zim:input' double-dot-expand yes
-
-#
-# termtitle
-#
-
-# Set a custom terminal title format using prompt expansion escape sequences.
-# See http://zsh.sourceforge.net/Doc/Release/Prompt-Expansion.html#Simple-Prompt-Escapes
-# If none is provided, the default '%n@%m: %~' is used.
-#zstyle ':zim:termtitle' format '%1~'
-
-#
-# zsh-autosuggestions
-#
-
-# Disable automatic widget re-binding on each precmd. This can be set when
-# zsh-users/zsh-autosuggestions is the last module in your ~/.zimrc.
-ZSH_AUTOSUGGEST_MANUAL_REBIND=1
-
-# Customize the style that the suggestions are shown with.
-# See https://github.com/zsh-users/zsh-autosuggestions/blob/master/README.md#suggestion-highlight-style
-#ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=242'
-
-#
-# zsh-syntax-highlighting
-#
-
-# Set what highlighters will be used.
-# See https://github.com/zsh-users/zsh-syntax-highlighting/blob/master/docs/highlighters.md
-ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets)
-
-# Customize the main highlighter styles.
-# See https://github.com/zsh-users/zsh-syntax-highlighting/blob/master/docs/highlighters/main.md#how-to-tweak-it
-#typeset -A ZSH_HIGHLIGHT_STYLES
-#ZSH_HIGHLIGHT_STYLES[comment]='fg=242'
-
-# ------------------
-# Initialize modules
-# ------------------
-
-ZIM_HOME=${ZDOTDIR:-${HOME}}/.zim
-# Download zimfw plugin manager if missing.
-if [[ ! -e ${ZIM_HOME}/zimfw.zsh ]]; then
-  if (( ${+commands[curl]} )); then
-    curl -fsSL --create-dirs -o ${ZIM_HOME}/zimfw.zsh \
-        https://github.com/zimfw/zimfw/releases/latest/download/zimfw.zsh
-  else
-    mkdir -p ${ZIM_HOME} && wget -nv -O ${ZIM_HOME}/zimfw.zsh \
-        https://github.com/zimfw/zimfw/releases/latest/download/zimfw.zsh
+# Source all files from a directory, sorted alphabetically
+_zsh_source_dir() {
+  local dir="$1"
+  if [[ -d "$dir" ]]; then
+    for file in "$dir"/*.zsh(N); do
+      [[ -f "$file" ]] && source "$file"
+    done
   fi
-fi
-# Install missing modules, and update ${ZIM_HOME}/init.zsh if missing or outdated.
-if [[ ! ${ZIM_HOME}/init.zsh -nt ${ZIM_CONFIG_FILE:-${ZDOTDIR:-${HOME}}/.zimrc} ]]; then
-  source ${ZIM_HOME}/zimfw.zsh init -q 2>/dev/null
-fi
-# Initialize modules.
-source ${ZIM_HOME}/init.zsh
+}
 
-# Restore original compinit if we stubbed it out
-if [[ -n "${FLOX_ENV}" ]] && typeset -f compinit > /dev/null; then
-  unfunction compinit 2>/dev/null
-  [[ -n "${_orig_compinit}" ]] && autoload -Uz compinit
-  unset _orig_compinit
-fi
+# 1. Pre-init stage (before everything)
+_zsh_source_dir ~/.config/zsh/pre-init
 
-# ------------------------------
-# Post-init module configuration
-# ------------------------------
+# 2. Init stage (main initialization, includes zim)
+_zsh_source_dir ~/.config/zsh/init
 
-#
-# zsh-history-substring-search
-#
+# 3. Post-init stage (after everything)
+_zsh_source_dir ~/.config/zsh/post-init
 
-zmodload -F zsh/terminfo +p:terminfo
-# Bind ^[[A/^[[B manually so up/down works both before and after zle-line-init
-for key ('^[[A' '^P' ${terminfo[kcuu1]}) bindkey ${key} history-substring-search-up
-for key ('^[[B' '^N' ${terminfo[kcud1]}) bindkey ${key} history-substring-search-down
-for key ('k') bindkey -M vicmd ${key} history-substring-search-up
-for key ('j') bindkey -M vicmd ${key} history-substring-search-down
-unset key
-
-# Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
-# Initialization code that may require console input (password prompts, [y/n]
-# confirmations, etc.) must go above this block; everything else may go below.
-# 
-# Skip instant prompt when in flox-activated shells to avoid compinit warnings
-# since flox will call compinit again when fpath changes
-if [[ -z "${FLOX_ENV}" && -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
-  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
-fi
-
-# Source all configs from ~/.config/zsh/
-# These are sourced after instant prompt to avoid console output warnings
-for config in ~/.config/zsh/*.zsh; do
-    [ -f "$config" ] && source "$config"
-done
-
-# fnm (Fast Node Manager)
-eval "$(fnm env --use-on-cd)"
+# Cleanup
+unfunction _zsh_source_dir
