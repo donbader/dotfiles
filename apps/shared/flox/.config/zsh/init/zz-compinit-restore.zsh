@@ -2,7 +2,7 @@
 # Flox Init Hook (runs after zim)
 # ------------------------------
 # Restores compinit if it was stubbed in pre-init
-# This file uses 99- prefix to ensure it loads after zim
+# This file is named to load AFTER zim.zsh alphabetically
 
 # Restore original compinit if flox stubbed it out in pre-init
 # This handles the case when starting a shell inside an existing flox environment
