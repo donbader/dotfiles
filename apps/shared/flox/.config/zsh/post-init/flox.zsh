@@ -1,12 +1,15 @@
 # ------------------------------
-# Flox Post-Init Hook
+# Flox Post-Init Hook  
 # ------------------------------
-# Restores compinit after zim initialization if it was stubbed in pre-init
+# Suppresses the "compinit being called again" warning when flox activates
 
-# Restore original compinit if we stubbed it out in pre-init
-if [[ -n "${_FLOX_STUBBED_COMPINIT}" ]]; then
-  unfunction compinit 2>/dev/null
-  [[ -n "${_orig_compinit}" ]] && autoload -Uz compinit
-  unset _orig_compinit
-  unset _FLOX_STUBBED_COMPINIT
+# When flox activates and changes fpath, it calls compinit to reload completions.
+# This triggers a warning because zim already initialized completions.
+# Solution: Just make compinit a no-op since completions are already loaded.
+# New completions from flox packages will work after restarting the shell.
+
+if (( ${+functions[compinit]} )); then
+  # Replace compinit with a no-op that silently succeeds
+  # This prevents the warning and avoids reinitializing completions unnecessarily
+  compinit() { return 0; }
 fi

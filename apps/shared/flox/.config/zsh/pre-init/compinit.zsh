@@ -1,11 +1,11 @@
 # ------------------------------
 # Flox Pre-Init Hook
 # ------------------------------
-# Prevents duplicate compinit calls when flox is activated
-# This runs BEFORE zim initialization to stub out compinit
+# Prevents duplicate compinit calls when starting shell inside flox environment
 
 # If compinit was already called (by flox), stub it out temporarily for zim
-if [[ -n "${FLOX_ENV}" ]] && typeset -f compinit > /dev/null; then
+# This happens when starting a new zsh shell while already in a flox environment
+if [[ -n "${FLOX_ENV}" ]] && (( ${+functions[compinit]} )); then
   # compinit already exists (called by flox), so stub it out temporarily
   _orig_compinit=$(which compinit)
   compinit() { : ; }  # No-op function
