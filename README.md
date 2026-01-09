@@ -106,12 +106,19 @@ cd ~/Projects/dotfiles
 ### Update Configurations
 
 ```bash
-# Restow (update) app configurations
+# Restow (update) app configurations after making changes
 ./install.sh --restow git zsh
 
-# Restow all apps
+# Restow all apps (useful after major restructuring)
 ./install.sh --restow --all
 ```
+
+**When to restow:**
+- After reorganizing config file structure
+- After renaming files in your apps
+- When symlinks are broken or pointing to wrong locations
+
+See [docs/RESTOW.md](docs/RESTOW.md) for more details.
 
 ### Remove Configurations
 

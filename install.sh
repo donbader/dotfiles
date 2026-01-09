@@ -31,7 +31,7 @@ OPTIONS:
     -n, --no-deps       Skip dependency installation (only stow configs)
     -d, --dry-run       Show what would be installed without doing it
     -u, --unstow        Unstow (remove) apps instead of installing
-    -r, --restow        Restow (update) apps
+    -r, --restow        Restow (update) apps - use after changing config structure
     -h, --help          Show this help message
 
 EXAMPLES:
@@ -40,7 +40,8 @@ EXAMPLES:
     $(basename "$0") --no-deps git            # Install git config only
     $(basename "$0") --list                   # List available apps
     $(basename "$0") --unstow git             # Remove git configuration
-    $(basename "$0") --restow zsh             # Update zsh configuration
+    $(basename "$0") --restow zsh             # Sync zsh with latest changes
+    $(basename "$0") --restow --all           # Sync ALL apps (after restructure)
 
 EOF
 }
