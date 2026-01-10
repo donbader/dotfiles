@@ -17,7 +17,8 @@
     "go": true,
     "javascript": true,
     "shell": true,
-    "shellscript": true
+    "shellscript": true,
+    "toml": true
   },
   "[json]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
