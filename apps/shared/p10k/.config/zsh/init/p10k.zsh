@@ -1694,12 +1694,11 @@ fi
   #####################################[ flox: flox environment ]####################################
   # Flox environment indicator - displays when inside a flox environment
   function prompt_flox() {
-    # Check if we're in a flox environment by looking for FLOX_ENV variable
+    # Check if we're in a flox environment
     [[ -n "${FLOX_ENV}" ]] || return
     
-    # Extract environment name from FLOX_ENV path
-    # FLOX_ENV typically looks like: /path/to/project/.flox/run/<hash>/etc
-    local flox_env_name="${FLOX_ENV:h:h:h:h:t}"
+    # Use FLOX_ENV_DESCRIPTION which contains the name from env.json
+    local flox_env_name="${FLOX_ENV_DESCRIPTION:-${FLOX_ENV:h:h:h:t}}"
     
     # Display the environment name
     p10k segment -s FLOX -f 74 -i '❄' -t "${flox_env_name}"
