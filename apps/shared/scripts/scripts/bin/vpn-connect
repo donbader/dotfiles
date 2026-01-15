@@ -2,6 +2,13 @@
 
 set -euo pipefail
 
+# Check if running on macOS
+if [[ "$OSTYPE" != "darwin"* ]]; then
+    echo "Error: This script only works on macOS (requires Pritunl.app)" >&2
+    echo "Platform detected: $OSTYPE" >&2
+    exit 1
+fi
+
 # Paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OTP_SCRIPT="$(command -v otp || echo "${SCRIPT_DIR}/otp")"

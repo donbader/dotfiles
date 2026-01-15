@@ -5,7 +5,7 @@
  * This script manages TOTP (Time-based One-Time Password) secrets in macOS Keychain.
  * 
  * Requirements:
- *     None - uses built-in Node.js crypto module and macOS Keychain
+ *     macOS only - uses macOS Keychain (security command)
  * 
  * Usage:
  *     ./otp add <name> <secret>     Add/update OTP secret
@@ -585,6 +585,13 @@ Examples:
  * Main entry point
  */
 async function main() {
+    // Check if running on macOS
+    if (process.platform !== 'darwin') {
+        console.error('Error: This script only works on macOS (requires Keychain)');
+        console.error('Platform detected:', process.platform);
+        process.exit(1);
+    }
+
     const args = process.argv.slice(2).filter(arg => !arg.startsWith('--'));
 
     if (args.length === 0) {
