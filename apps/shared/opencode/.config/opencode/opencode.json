@@ -3,7 +3,8 @@
   // Theme configuration
   "theme": "gruvbox",
   // "model": "github-copilot/claude-sonnet-4.5",
-  "model": "openai/gpt-5.2-codex",
+  // "model": "openai/gpt-5.2-codex",
+  "model": "google/antigravity-claude-sonnet-4-5-thinking",
   // "small_model": "openai/gpt-5-codex-mini",
   "autoupdate": true,
   "mcp": {
