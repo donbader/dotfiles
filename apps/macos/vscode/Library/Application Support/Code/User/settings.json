@@ -18,12 +18,16 @@
     "javascript": true,
     "shell": true,
     "shellscript": true,
-    "toml": true
+    "toml": true,
+    "typescript": true
   },
   "[json]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   }
 }
