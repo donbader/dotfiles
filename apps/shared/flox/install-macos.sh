@@ -1,5 +1,10 @@
 #!/bin/bash
 # Flox installation for macOS
-# Install via: curl -fsSL https://downloads.flox.dev/by-env/stable/macos/install | bash
-echo "Flox installation typically done via: curl -fsSL https://downloads.flox.dev/by-env/stable/macos/install | bash"
-echo "Please install flox manually if not already installed."
+
+if command -v brew >/dev/null 2>&1; then
+  brew install flox
+else
+  echo "Homebrew not found. Install Flox manually with:"
+  echo "curl -fsSL https://downloads.flox.dev/by-env/stable/macos/install | bash"
+  exit 1
+fi
