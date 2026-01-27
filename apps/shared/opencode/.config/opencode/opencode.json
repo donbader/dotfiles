@@ -4,7 +4,8 @@
   "theme": "gruvbox",
   // "model": "github-copilot/claude-sonnet-4.5",
   // "model": "openai/gpt-5.2-codex",
-  "model": "google/antigravity-gemini-3-flash",
+  // "model": "google/antigravity-gemini-3-flash",
+  "model": "kiro-proxy/claude-sonnet-4.5",
   // "small_model": "openai/gpt-5-codex-mini",
   "autoupdate": true,
   "mcp": {
@@ -51,11 +52,39 @@
       "enabled": true
     }
   },
-  "plugin": [
-    "opencode-antigravity-auth@beta",
-    "opencode-antigravity-quota@0.1.6"
-  ],
+  "plugin": ["opencode-antigravity-auth@beta", "opencode-mystatus"],
+  "command": {
+    "mystatus": {
+      "description": "Query quota usage for all AI accounts",
+      "template": "Use the mystatus tool to query quota usage. Return the result as-is without modification."
+    }
+  },
   "provider": {
+    "kiro": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Kiro Proxy",
+      "options": {
+        "baseURL": "http://127.0.0.1:8000/v1",
+        "apiKey": "my-super-secret-password-123"
+      },
+      "models": {
+        "auto": {
+          "name": "Auto"
+        },
+        "claude-haiku-4.5": {
+          "name": "Claude Haiku 4.5"
+        },
+        "claude-opus-4.5": {
+          "name": "Claude Opus 4.5"
+        },
+        "claude-sonnet-4": {
+          "name": "Claude Sonnet 4"
+        },
+        "claude-sonnet-4.5": {
+          "name": "Claude Sonnet 4.5"
+        }
+      }
+    },
     "google": {
       "models": {
         "antigravity-gemini-3-pro": {
