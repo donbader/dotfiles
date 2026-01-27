@@ -65,7 +65,7 @@
   "plugin": [
     "opencode-antigravity-auth@beta",
     "opencode-mystatus",
-    "oh-my-opencode@3.1.1"
+    "oh-my-opencode@3.1.2"
   ],
   "command": {
     "mystatus": {
