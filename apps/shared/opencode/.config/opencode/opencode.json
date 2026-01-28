@@ -71,16 +71,36 @@
           "name": "Auto"
         },
         "claude-haiku-4.5": {
-          "name": "Claude Haiku 4.5"
+          "name": "Claude Haiku 4.5",
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          }
         },
         "claude-opus-4.5": {
-          "name": "Claude Opus 4.5"
+          "name": "Claude Opus 4.5",
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          }
         },
         "claude-sonnet-4": {
-          "name": "Claude Sonnet 4"
+          "name": "Claude Sonnet 4",
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          }
         },
         "claude-sonnet-4.5": {
-          "name": "Claude Sonnet 4.5"
+          "name": "Claude Sonnet 4.5",
+          "limit": {
+            "context": 1048576,
+            "output": 65535
+          },
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          }
         }
       }
     },
