@@ -38,11 +38,7 @@
       "enabled": true
     },
     "pencil": {
-      "command": [
-        "/Applications/Pencil.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64",
-        "--ws-port",
-        "61678"
-      ],
+      "command": ["~/.config/opencode/pencil-mcp-wrapper.sh"],
       "enabled": true,
       "type": "local"
     }
