@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Find the port Pencil is listening on
-PORT=$(lsof -iTCP -sTCP:LISTEN -n -P | grep Pencil | grep -oE ':[0-9]+' | grep -oE '[0-9]+' | head -1)
+# Find the port Pencil is listening on (IPv6 localhost)
+PORT=$(lsof -iTCP -sTCP:LISTEN -n -P | grep Pencil | grep '\[::1\]:' | sed -n 's/.*\[::1\]:\([0-9]*\).*/\1/p' | head -1)
 
 # If no port found, exit with error
 if [ -z "$PORT" ]; then
